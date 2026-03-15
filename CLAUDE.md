@@ -148,7 +148,7 @@ go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
 ### Critical Rules
 
-- **API paths**: Always `/api/*`, NEVER `/api/v1/*`
+- **API paths**: Always `/api/v1/*` (matches server router)
 - **WS field names**: `threshold_mode` NOT `mode` in
   VoiceConfig and VoiceSpeakers payloads
 - **Roles**: Always use role NAME strings ("admin",
