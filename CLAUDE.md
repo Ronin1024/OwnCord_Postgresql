@@ -253,11 +253,17 @@ go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
   overlay showing favorited servers. Click to disconnect and
   switch via sessionStorage handoff to ConnectPage.
   Component: `QuickSwitchOverlay.ts`.
+- **Voice call duration timer**: Elapsed time counter in
+  VoiceWidget (MM:SS / HH:MM:SS). Stored as `joinedAt` in
+  `voice.store.ts`, rendered by 1-second interval in
+  `VoiceWidget.ts`. Local-only (each user sees their own
+  timer). Resets on leave/disconnect.
 - **OC Neon Glow Theme + Theming System**: New default theme
   with cyan (#00c8ff) → purple (#7b2fff) gradient. Theme manager
   in `lib/themes.ts` supports built-in + custom themes via
   JSON import/export. Accent color picker overrides theme accent.
-  Theme file: `theme-neon-glow.css`. Restored on app startup.
+  Theme file: `theme-neon-glow.css`. Restored on app startup
+  (both theme class and accent color override).
 
 ## Critical Rules (always apply)
 
@@ -270,6 +276,12 @@ go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
   `offline`. Never `invisible`.
 - **Tenor API key**: The key in `lib/tenor.ts` is Google's
   public anonymous key — not a secret. Do not move to env.
+- **DM authorization**: DM channels use `IsDMParticipant`
+  checks instead of role-based permissions. Every handler
+  that touches a channel must branch on `ch.Type == "dm"`
+  and verify participant membership. This applies to WS
+  handlers (channel_focus, typing, chat_send, edit, delete,
+  reaction) and REST handlers (GET messages, pins).
 
 ## Conventions & Details (see canonical files in docs/brain/)
 
