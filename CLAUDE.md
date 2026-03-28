@@ -284,6 +284,14 @@ go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
   JSON import/export. Accent color picker overrides theme accent.
   Theme file: `theme-neon-glow.css`. Restored on app startup
   (both theme class and accent color override).
+- **Discord-style Settings Panel**: Centered floating panel with
+  blurred backdrop (8px blur), rounded corners (12px), scale
+  animation on open, and click-outside-to-close behavior.
+  Component: `components/SettingsOverlay.ts`. CSS: `.settings-overlay`
+  (full-screen backdrop) and `.settings-panel` (900px wide card with
+  sidebar navigation, 80vh height). Tabs: Account, Appearance,
+  Notifications, Text & Images, Accessibility, Voice & Audio,
+  Keybinds, Advanced, Logs.
 
 ## Critical Rules (always apply)
 
