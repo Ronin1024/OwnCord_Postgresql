@@ -105,6 +105,9 @@ All specs live in `docs/brain/06-Specs/`:
   prevention.
 - **RECONNECTION.md** -- Reconnection protocol: seq numbers,
   ring buffer replay, state recovery flow.
+- **VOICE-COMPARISON-MATRIX.md** -- Competitive comparison
+  of 25 voice/video behaviors across Discord, TeamSpeak,
+  Guilded. Gap priorities and OwnCord target behaviors.
 - **protocol-schema.json** -- Machine-readable schema for all
   36 WebSocket message types with field definitions. Located
   at `docs/protocol-schema.json`.
@@ -130,8 +133,9 @@ OwnCord/
 │   │   │   └── src/
 │   │   ├── src/             #   TypeScript frontend
 │   │   │   ├── lib/         #     Core services (incl. livekitSession.ts,
-│   │   │   │                #       connectionStats.ts, disposable.ts,
-│   │   │   │                #       logPersistence.ts)
+│   │   │   │                #       audioPipeline.ts, audioElements.ts,
+│   │   │   │                #       deviceManager.ts, connectionStats.ts,
+│   │   │   │                #       disposable.ts, logPersistence.ts)
 │   │   │   ├── stores/      #     Reactive state
 │   │   │   ├── components/  #     UI components
 │   │   │   ├── pages/       #     Page layouts
@@ -157,7 +161,7 @@ OwnCord/
 
 ```bash
 cd Server
-go build -o chatserver.exe -ldflags "-s -w -X main.version=1.2.0" .
+go build -o chatserver.exe -ldflags "-s -w -X main.version=1.3.0" .
 go test ./...                        # all tests
 go test ./... -cover                 # with coverage
 ```
@@ -208,9 +212,17 @@ go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
 - **Voice & video chat**: LiveKit-powered voice and video.
   LiveKit server runs as a companion process alongside
-  `chatserver.exe`. Client connects via `livekitSession.ts`.
-  VideoGrid component replaces chat area when cameras are
-  active.
+  `chatserver.exe`. Client connects via `livekitSession.ts`
+  (facade pattern delegating to `audioPipeline.ts`,
+  `audioElements.ts`, `deviceManager.ts`). VideoGrid
+  component replaces chat area when cameras are active.
+  VAD runs on AudioWorklet (`public/vad-worklet.js`) with
+  setTimeout fallback. Token TTL: 24h (refresh at 23h).
+  Ghost state cleanup: retry with exponential backoff.
+  Speaker indicators: pulsing green glow animation.
+  Device hot-swap: auto-fallback to default + toast.
+  Listen-only mode: "Grant Microphone" recovery button.
+  Connection quality: auto-expand stats on degradation.
 - **GIF picker**: Tenor API v2 integration via
   `lib/tenor.ts`. Uses Google's public anonymous API key.
   Picker in MessageInput sends GIF URL as message content;
@@ -224,10 +236,12 @@ go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
   Taskbar flash, notification sound, @everyone suppression.
 - **Connection quality indicator**: Signal-bars icon +
   ping text in VoiceWidget header. Clicking it expands a
-  transport statistics pane (outgoing/incoming rates,
-  packets, RTT, session totals). Polls WebRTC stats every
-  2s via `lib/connectionStats.ts`. Color-coded: green
-  (<100ms), yellow (100-200ms), red (>200ms).
+  transport statistics pane (outgoing/incoming rates with
+  Mbps, packets, RTT, session totals). Polls WebRTC stats
+  every 2s via `lib/connectionStats.ts`. Color-coded: green
+  (<100ms), yellow (100-200ms), red (>200ms). Auto-expands
+  stats pane on poor/bad quality (3s debounce). Quality
+  change callback: `onQualityChanged` with debounce.
 - **Compact mode**: CSS class `.compact-mode` on body
   reduces spacing, avatar sizes, and font sizes throughout.
 - **Admin IP restriction**: `/admin` routes restricted to
@@ -235,7 +249,7 @@ go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
   networks only). Middleware in `api/middleware.go`.
 - **Metrics endpoint**: `GET /api/v1/metrics` (admin IP
   restricted) returns uptime, goroutines, heap, connected
-  users.
+  users, voice sessions, LiveKit health.
 - **Reconnection with state recovery**: Client tracks `seq`
   numbers on all server broadcasts. On reconnect, sends
   `last_seq` in auth; server replays missed events from a
