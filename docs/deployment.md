@@ -4,7 +4,7 @@ Production deployment guide for OwnCord server on Windows.
 
 ## Prerequisites
 
-- **Windows 10+** (x64)
+- **Windows 10+** (x64) or - **Linux** (x64)
 - **Go 1.22+** (only if building from source)
 - **LiveKit Server** binary (for voice/video) -- see [LiveKit Setup](livekit-setup.md)
 - Ports available: `8443` (default), `7880` (LiveKit), `80` (if using ACME/Let's Encrypt)
@@ -26,9 +26,9 @@ Alternatively, download a pre-built `chatserver.exe` from GitHub Releases.
 When `chatserver.exe` starts for the first time:
 
 1. **Config creation** -- `config.yaml` is written to the working directory with defaults
-2. **Data directory** -- `data/` is created (database, certs, uploads, backups)
+2. **Data directory** -- `data/` is created (certs, uploads, backups)
 3. **TLS certificate** -- A self-signed certificate is generated at `data/cert.pem` / `data/key.pem`
-4. **Database migration** -- SQLite database is created and all migrations run
+4. **Database migration** -- Postgresql tables is created and all migrations run
 5. **Status reset** -- All user statuses are set to `offline`, stale voice states are cleared
 6. **Admin setup page** -- Navigate to `https://localhost:8443/admin` to create the Owner account
 

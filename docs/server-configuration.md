@@ -39,7 +39,12 @@ Configuration is loaded in three layers (later layers override earlier ones):
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `database.path` | string | `"data/chatserver.db"` | Path to SQLite database file |
+| `database.path` | string | `"data/chatserver.db"` | Depricated |
+| `database.host` | string | `"127.0.0.1"` | Postgresql host |
+| `database.port` | int | `5432` | Postgresql port |
+| `database.database` | string | `"owncord"` | Postgresql database name |
+| `database.user` | string | `"owncord"` | Postgresql user |
+| `database.password` | string | `"owncord"` | Postgresql password |
 
 ### Uploads (`upload`)
 
@@ -90,6 +95,11 @@ Every config key can be overridden via environment variables using the prefix `O
 | `OWNCORD_VOICE_NODE_IP` | `voice.node_ip` |
 | `OWNCORD_VOICE_QUALITY` | `voice.quality` |
 | `OWNCORD_GITHUB_TOKEN` | `github.token` |
+| `OWNCORD_DATABASE_HOST` | `database.host` |
+| `OWNCORD_DATABASE_PORT` | `database.port` |
+| `OWNCORD_DATABASE_DATABASE` | `database.database` |
+| `OWNCORD_DATABASE_USER` | `database.user` |
+| `OWNCORD_DATABASE_PASSWORD` | `database.password` |
 
 ## Example config.yaml
 
