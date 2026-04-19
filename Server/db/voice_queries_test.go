@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS channels (
     position        INTEGER NOT NULL DEFAULT 0,
     slow_mode       INTEGER NOT NULL DEFAULT 0,
     archived        INTEGER NOT NULL DEFAULT 0,
-    created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+    created_at      TEXT    NOT NULL DEFAULT (TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS')),
     voice_max_users INTEGER NOT NULL DEFAULT 0,
     voice_quality   TEXT,
     mixing_threshold INTEGER,
@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS voice_states (
     speaking    INTEGER NOT NULL DEFAULT 0,
     camera      INTEGER NOT NULL DEFAULT 0,
     screenshare INTEGER NOT NULL DEFAULT 0,
-    joined_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+    joined_at   TEXT    NOT NULL DEFAULT (TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS'))
 );
 CREATE INDEX IF NOT EXISTS idx_voice_states_channel ON voice_states(channel_id);
 `)},

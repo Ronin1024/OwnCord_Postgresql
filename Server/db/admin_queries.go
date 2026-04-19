@@ -43,10 +43,10 @@ func (d *DB) GetServerStats() (*ServerStats, error) {
 	// page_count * page_size gives the database size in bytes.
 	// For :memory: databases this still works (returns the in-memory size).
 	var pageCount, pageSize int64
-	if err := d.sqlDB.QueryRow(`PRAGMA page_count`).Scan(&pageCount); err != nil {
+	if err := d.sqlDB.QueryRow(`SELECT pg_database_size(current_database())`).Scan(&pageCount); err != nil {
 		return nil, fmt.Errorf("GetServerStats page_count: %w", err)
 	}
-	if err := d.sqlDB.QueryRow(`PRAGMA page_size`).Scan(&pageSize); err != nil {
+	if err := d.sqlDB.QueryRow(`SHOW block_size`).Scan(&pageSize); err != nil {
 		return nil, fmt.Errorf("GetServerStats page_size: %w", err)
 	}
 	stats.DBSizeBytes = pageCount * pageSize
@@ -66,7 +66,7 @@ func (d *DB) ListAllUsers(limit, offset int) ([]UserWithRole, error) {
 		 FROM users u
 		 LEFT JOIN roles r ON r.id = u.role_id
 		 ORDER BY u.id ASC
-		 LIMIT ? OFFSET ?`,
+		 LIMIT $1 OFFSET $2`,
 		limit, offset,
 	)
 	if err != nil {
@@ -102,7 +102,7 @@ func (d *DB) ListAllUsers(limit, offset int) ([]UserWithRole, error) {
 // UpdateUserRole changes the role_id of a user.
 func (d *DB) UpdateUserRole(userID, roleID int64) error {
 	_, err := d.sqlDB.Exec(
-		`UPDATE users SET role_id = ? WHERE id = ?`,
+		`UPDATE users SET role_id = $1 WHERE id = $2`,
 		roleID, userID,
 	)
 	if err != nil {
@@ -113,7 +113,7 @@ func (d *DB) UpdateUserRole(userID, roleID int64) error {
 
 // ForceLogoutUser deletes all sessions for the given user ID.
 func (d *DB) ForceLogoutUser(userID int64) error {
-	_, err := d.sqlDB.Exec(`DELETE FROM sessions WHERE user_id = ?`, userID)
+	_, err := d.sqlDB.Exec(`DELETE FROM sessions WHERE user_id = $1`, userID)
 	if err != nil {
 		return fmt.Errorf("ForceLogoutUser: %w", err)
 	}
@@ -124,7 +124,7 @@ func (d *DB) ForceLogoutUser(userID int64) error {
 func (d *DB) GetUserSessions(userID int64) ([]Session, error) {
 	rows, err := d.sqlDB.Query(
 		`SELECT id, user_id, token, device, ip_address, created_at, last_used, expires_at
-		 FROM sessions WHERE user_id = ? ORDER BY created_at DESC`,
+		 FROM sessions WHERE user_id = $1 ORDER BY created_at DESC`,
 		userID,
 	)
 	if err != nil {
@@ -157,15 +157,16 @@ func (d *DB) GetUserSessions(userID int64) ([]Session, error) {
 
 // AdminCreateChannel creates a channel with full field control including position.
 func (d *DB) AdminCreateChannel(name, chanType, category, topic string, position int) (int64, error) {
-	res, err := d.sqlDB.Exec(
+	var ID int64
+	err := d.sqlDB.QueryRow(
 		`INSERT INTO channels (name, type, category, topic, position)
-		 VALUES (?, ?, ?, ?, ?)`,
+		 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
 		name, chanType, nullableString(category), nullableString(topic), position,
-	)
+	).Scan(&ID)
 	if err != nil {
 		return 0, fmt.Errorf("AdminCreateChannel: %w", err)
 	}
-	return res.LastInsertId()
+	return ID, err
 }
 
 // AdminUpdateChannel updates all mutable channel fields.
@@ -175,9 +176,7 @@ func (d *DB) AdminUpdateChannel(id int64, name, topic string, slowMode, position
 		archivedInt = 1
 	}
 	_, err := d.sqlDB.Exec(
-		`UPDATE channels
-		 SET name = ?, topic = ?, slow_mode = ?, position = ?, archived = ?
-		 WHERE id = ?`,
+		`UPDATE channels SET name = $1, topic = $2, slow_mode = $3, position = $4, archived = $5 WHERE id = $6`,
 		name, nullableString(topic), slowMode, position, archivedInt, id,
 	)
 	if err != nil {
@@ -188,7 +187,7 @@ func (d *DB) AdminUpdateChannel(id int64, name, topic string, slowMode, position
 
 // AdminDeleteChannel removes a channel by ID (cascades to messages, etc.).
 func (d *DB) AdminDeleteChannel(id int64) error {
-	_, err := d.sqlDB.Exec(`DELETE FROM channels WHERE id = ?`, id)
+	_, err := d.sqlDB.Exec(`DELETE FROM channels WHERE id = $1`, id)
 	if err != nil {
 		return fmt.Errorf("AdminDeleteChannel: %w", err)
 	}
@@ -201,7 +200,7 @@ func (d *DB) AdminDeleteChannel(id int64) error {
 func (d *DB) LogAudit(actorID int64, action, targetType string, targetID int64, detail string) error {
 	_, err := d.sqlDB.Exec(
 		`INSERT INTO audit_log (actor_id, action, target_type, target_id, detail)
-		 VALUES (?, ?, ?, ?, ?)`,
+		 VALUES ($1, $2, $3, $4, $5)`,
 		actorID, action, targetType, targetID, detail,
 	)
 	if err != nil {
@@ -218,7 +217,7 @@ func (d *DB) GetAuditLog(limit, offset int) ([]AuditEntry, error) {
 		 FROM audit_log a
 		 LEFT JOIN users u ON u.id = a.actor_id
 		 ORDER BY a.id DESC
-		 LIMIT ? OFFSET ?`,
+		 LIMIT $1 OFFSET $2`,
 		limit, offset,
 	)
 	if err != nil {
@@ -252,7 +251,7 @@ func (d *DB) GetAuditLog(limit, offset int) ([]AuditEntry, error) {
 // Returns an error (wrapping sql.ErrNoRows) when the key does not exist.
 func (d *DB) GetSetting(key string) (string, error) {
 	var value string
-	err := d.sqlDB.QueryRow(`SELECT value FROM settings WHERE key = ?`, key).Scan(&value)
+	err := d.sqlDB.QueryRow(`SELECT value FROM settings WHERE key = $1`, key).Scan(&value)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", fmt.Errorf("GetSetting: key %q: %w", key, ErrNotFound)
 	}
@@ -265,7 +264,7 @@ func (d *DB) GetSetting(key string) (string, error) {
 // SetSetting upserts a setting value for the given key.
 func (d *DB) SetSetting(key, value string) error {
 	_, err := d.sqlDB.Exec(
-		`INSERT INTO settings (key, value) VALUES (?, ?)
+		`INSERT INTO settings (key, value) VALUES ($1, $2)
 		 ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
 		key, value,
 	)

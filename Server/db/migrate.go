@@ -27,7 +27,7 @@ import (
 const createSchemaVersions = `
 CREATE TABLE IF NOT EXISTS schema_versions (
     version    TEXT PRIMARY KEY,
-    applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+    applied_at TEXT NOT NULL DEFAULT (TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS'))
 )`
 
 // ensureSchemaVersions creates the tracking table if it does not yet exist.
@@ -68,7 +68,7 @@ func schemaVersionsExists(d *DB) (bool, error) {
 func isApplied(d *DB, filename string) (bool, error) {
 	var v string
 	err := d.sqlDB.QueryRow(
-		"SELECT version FROM schema_versions WHERE version = ?", filename,
+		"SELECT version FROM schema_versions WHERE version = $1", filename,
 	).Scan(&v)
 	if err != nil {
 		return false, nil
@@ -79,7 +79,7 @@ func isApplied(d *DB, filename string) (bool, error) {
 // recordApplied inserts a migration filename into schema_versions.
 func recordApplied(d *DB, filename string) error {
 	_, err := d.sqlDB.Exec(
-		"INSERT INTO schema_versions (version) VALUES (?)", filename,
+		"INSERT INTO schema_versions (version) VALUES ($1)", filename,
 	)
 	if err != nil {
 		return fmt.Errorf("recording migration %s: %w", filename, err)
@@ -187,9 +187,7 @@ func MigrateFS(database *DB, fsys fs.FS) error {
 		// Record the migration inside the same transaction so the migration
 		// and its tracking record are atomic. A crash between commit and
 		// record would otherwise cause re-application on next startup.
-		if _, execErr := tx.Exec(
-			"INSERT INTO schema_versions (version) VALUES (?)", name,
-		); execErr != nil {
+		if _, execErr := tx.Exec("INSERT INTO schema_versions (version) VALUES ($1)", name); execErr != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("recording migration %s: %w", name, execErr)
 		}

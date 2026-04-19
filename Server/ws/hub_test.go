@@ -354,7 +354,7 @@ func TestHub_ChatSend_RateLimit(t *testing.T) {
 
 	// Drain all messages, count errors.
 	errCount := 0
-	drainLoop:
+drainLoop:
 	for {
 		select {
 		case got := <-send:
@@ -529,11 +529,11 @@ CREATE TABLE IF NOT EXISTS roles (
     is_default  INTEGER NOT NULL DEFAULT 0
 );
 
-INSERT OR IGNORE INTO roles (id, name, color, permissions, position, is_default) VALUES
+INSERT INTO roles (id, name, color, permissions, position, is_default) VALUES
     (1, 'Owner',     '#E74C3C', 2147483647, 100, 0),
     (2, 'Admin',     '#F39C12', 1073741823,  80, 0),
     (3, 'Moderator', '#3498DB', 1048575,     60, 0),
-    (4, 'Member',    NULL,      1635,     40, 1);
+    (4, 'Member',    NULL,      1635,     40, 1) ON CONFLICT DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS users (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -543,7 +543,7 @@ CREATE TABLE IF NOT EXISTS users (
     role_id     INTEGER NOT NULL DEFAULT 4 REFERENCES roles(id),
     totp_secret TEXT,
     status      TEXT    NOT NULL DEFAULT 'offline',
-    created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    created_at  TEXT    NOT NULL DEFAULT (TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS')),
     last_seen   TEXT,
     banned      INTEGER NOT NULL DEFAULT 0,
     ban_reason  TEXT,
@@ -556,8 +556,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     token      TEXT    NOT NULL UNIQUE,
     device     TEXT,
     ip_address TEXT,
-    created_at TEXT    NOT NULL DEFAULT (datetime('now')),
-    last_used  TEXT    NOT NULL DEFAULT (datetime('now')),
+    created_at TEXT    NOT NULL DEFAULT (TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS')),
+    last_used  TEXT    NOT NULL DEFAULT (TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS')),
     expires_at TEXT    NOT NULL
 );
 
@@ -570,7 +570,7 @@ CREATE TABLE IF NOT EXISTS channels (
     position         INTEGER NOT NULL DEFAULT 0,
     slow_mode        INTEGER NOT NULL DEFAULT 0,
     archived         INTEGER NOT NULL DEFAULT 0,
-    created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
+    created_at       TEXT    NOT NULL DEFAULT (TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS')),
     voice_max_users  INTEGER NOT NULL DEFAULT 0,
     voice_quality    TEXT,
     mixing_threshold INTEGER,
@@ -595,7 +595,7 @@ CREATE TABLE IF NOT EXISTS messages (
     edited_at  TEXT,
     deleted    INTEGER NOT NULL DEFAULT 0,
     pinned     INTEGER NOT NULL DEFAULT 0,
-    timestamp  TEXT    NOT NULL DEFAULT (datetime('now'))
+    timestamp  TEXT    NOT NULL DEFAULT (TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS'))
 );
 
 CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
@@ -638,9 +638,9 @@ CREATE TABLE IF NOT EXISTS settings (
     value TEXT NOT NULL
 );
 
-INSERT OR IGNORE INTO settings (key, value) VALUES
+INSERT  INTO settings (key, value) VALUES
     ('server_name', 'OwnCord Server'),
-    ('motd',        'Welcome!');
+    ('motd',        'Welcome!') ON CONFLICT DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS dm_participants (
     channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
@@ -651,7 +651,7 @@ CREATE TABLE IF NOT EXISTS dm_participants (
 CREATE TABLE IF NOT EXISTS dm_open_state (
     user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
-    opened_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    opened_at  TEXT NOT NULL DEFAULT (TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS')),
     PRIMARY KEY (user_id, channel_id)
 );
 `)

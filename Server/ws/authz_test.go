@@ -30,7 +30,7 @@ func channelFocusMsg(channelID int64) []byte {
 func denyReadOnChannel(t *testing.T, database *db.DB, channelID, roleID int64) {
 	t.Helper()
 	_, err := database.Exec(
-		`INSERT INTO channel_overrides (channel_id, role_id, allow, deny) VALUES (?, ?, 0, ?)`,
+		`INSERT INTO channel_overrides (channel_id, role_id, allow, deny) VALUES ($1, $2, 0, $3)`,
 		channelID, roleID, permissions.ReadMessages,
 	)
 	if err != nil {

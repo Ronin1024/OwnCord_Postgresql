@@ -17,13 +17,13 @@
 -- across re-runs, which is acceptable for a development-phase migration.
 
 CREATE TABLE IF NOT EXISTS audit_log_v6 (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    id          SERIAL PRIMARY KEY,
     actor_id    INTEGER NOT NULL DEFAULT 0,
     action      TEXT    NOT NULL,
     target_type TEXT    NOT NULL DEFAULT '',
     target_id   INTEGER NOT NULL DEFAULT 0,
     detail      TEXT    NOT NULL DEFAULT '',
-    created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+    created_at  TEXT    NOT NULL DEFAULT TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS')
 );
 
 DROP TABLE IF EXISTS audit_log;

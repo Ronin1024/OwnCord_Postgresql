@@ -24,7 +24,7 @@ func TestGetAttachmentByID_Found(t *testing.T) {
 	// Insert an attachment directly.
 	_, err := database.Exec(
 		`INSERT INTO attachments (id, filename, stored_as, mime_type, size)
-		 VALUES (?, ?, ?, ?, ?)`,
+		 VALUES ($1, $2, $3, $4, $5)`,
 		"att-001", "photo.png", "stored-photo.png", "image/png", 12345,
 	)
 	if err != nil {
@@ -76,7 +76,7 @@ func TestLinkAttachmentsToMessage_LinksUnlinked(t *testing.T) {
 	for _, id := range []string{"att-a", "att-b"} {
 		_, err := database.Exec(
 			`INSERT INTO attachments (id, filename, stored_as, mime_type, size)
-			 VALUES (?, ?, ?, ?, ?)`,
+			 VALUES ($1, $2, $3, $4, $5)`,
 			id, "file.txt", "stored.txt", "text/plain", 100,
 		)
 		if err != nil {
@@ -108,7 +108,7 @@ func TestLinkAttachmentsToMessage_SkipsAlreadyLinked(t *testing.T) {
 
 	_, _ = database.Exec(
 		`INSERT INTO attachments (id, filename, stored_as, mime_type, size, message_id)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
+		 VALUES ($1, $2, $3, $4, $5, $6)`,
 		"att-linked", "file.txt", "stored.txt", "text/plain", 100, msg1,
 	)
 
@@ -154,7 +154,7 @@ func TestGetAttachmentsByMessageIDs_GroupsByMessage(t *testing.T) {
 	} {
 		_, err := database.Exec(
 			`INSERT INTO attachments (id, filename, stored_as, mime_type, size, message_id)
-			 VALUES (?, ?, ?, ?, ?, ?)`,
+			 VALUES ($1, $2, $3, $4, $5, $6)`,
 			row.id, "f.txt", "s.txt", "text/plain", 50, row.msgID,
 		)
 		if err != nil {

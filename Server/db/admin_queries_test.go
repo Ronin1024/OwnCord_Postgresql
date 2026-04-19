@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS channels (
     position         INTEGER NOT NULL DEFAULT 0,
     slow_mode        INTEGER NOT NULL DEFAULT 0,
     archived         INTEGER NOT NULL DEFAULT 0,
-    created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
+    created_at       TEXT    NOT NULL DEFAULT (TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS')),
     voice_max_users  INTEGER NOT NULL DEFAULT 0,
     voice_quality    TEXT,
     mixing_threshold INTEGER,
@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS messages (
     edited_at  TEXT,
     deleted    INTEGER NOT NULL DEFAULT 0,
     pinned     INTEGER NOT NULL DEFAULT 0,
-    timestamp  TEXT    NOT NULL DEFAULT (datetime('now'))
+    timestamp  TEXT    NOT NULL DEFAULT (TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS'))
 );
 
 CREATE TABLE IF NOT EXISTS audit_log (
@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
     target_type TEXT    NOT NULL DEFAULT '',
     target_id   INTEGER NOT NULL DEFAULT 0,
     detail      TEXT    NOT NULL DEFAULT '',
-    created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+    created_at  TEXT    NOT NULL DEFAULT (TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at DESC);
@@ -59,9 +59,9 @@ CREATE TABLE IF NOT EXISTS settings (
     value TEXT NOT NULL
 );
 
-INSERT OR IGNORE INTO settings (key, value) VALUES
+INSERT INTO settings (key, value) VALUES
     ('server_name', 'OwnCord Server'),
-    ('motd', 'Welcome!');
+    ('motd', 'Welcome!') ON CONFLICT DO NOTHING;
 `)...)
 
 // newAdminTestDB opens an in-memory database with the admin-extended schema.

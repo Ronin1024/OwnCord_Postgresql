@@ -1,5 +1,7 @@
 # OwnCord
 
+This is a fork of OwnCord with Linux support and a PostgreSQL database.
+
 *The gaming chat platform you actually own.*
 
 A self-hosted Windows chat platform with real-time messaging,

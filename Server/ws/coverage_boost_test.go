@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS voice_states (
     speaking    INTEGER NOT NULL DEFAULT 0,
     camera      INTEGER NOT NULL DEFAULT 0,
     screenshare INTEGER NOT NULL DEFAULT 0,
-    joined_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+    joined_at   TEXT    NOT NULL DEFAULT (TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS'))
 );
 CREATE INDEX IF NOT EXISTS idx_voice_states_channel_cov ON voice_states(channel_id);
 
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
     target_type TEXT    NOT NULL DEFAULT '',
     target_id   INTEGER NOT NULL DEFAULT 0,
     detail      TEXT    NOT NULL DEFAULT '',
-    created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+    created_at  TEXT    NOT NULL DEFAULT (TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS'))
 );
 
 CREATE TABLE IF NOT EXISTS attachments (
@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS attachments (
     stored_as   TEXT    NOT NULL,
     mime_type   TEXT    NOT NULL,
     size        INTEGER NOT NULL,
-    uploaded_at TEXT    NOT NULL DEFAULT (datetime('now')),
+    uploaded_at TEXT    NOT NULL DEFAULT (TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS')),
     width       INTEGER,
     height      INTEGER
 );
@@ -942,7 +942,7 @@ func TestHandleChatSend_WithAttachments_NoPermission(t *testing.T) {
 	chID := seedTestChannel(t, database, "attach-noperm-chan")
 
 	// Deny ATTACH_FILES (0x0020) on this channel for Member role (id=4).
-	_, err = database.Exec("INSERT INTO channel_overrides (channel_id, role_id, allow, deny) VALUES (?, 4, 0, 32)", chID)
+	_, err = database.Exec("INSERT INTO channel_overrides (channel_id, role_id, allow, deny) VALUES ($1, 4, 0, 32)", chID)
 	if err != nil {
 		t.Fatalf("INSERT channel_overrides: %v", err)
 	}

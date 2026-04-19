@@ -5,10 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
-	"syscall"
 	"time"
 
 	"github.com/owncord/server/updater"
@@ -124,19 +121,4 @@ func handleApplyUpdate(u *updater.Updater, hub HubBroadcaster, _ string) http.Ha
 			os.Exit(0)
 		}()
 	})
-}
-
-// spawnDetached starts a new process that is not attached to the current one.
-func spawnDetached(exePath string, args []string) error {
-	cmd := exec.Command(exePath, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if runtime.GOOS == "windows" {
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			CreationFlags: 0x00000008, // DETACHED_PROCESS
-		}
-	}
-
-	return cmd.Start()
 }

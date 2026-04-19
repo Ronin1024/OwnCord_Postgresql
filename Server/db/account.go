@@ -32,7 +32,7 @@ func (d *DB) DeleteAccount(ctx context.Context, userID int64) error {
 	// Owner (role_id=1) and Admin (role_id=2) are both "admin-class" roles.
 	var userRoleID int64
 	if err := tx.QueryRowContext(ctx,
-		`SELECT role_id FROM users WHERE id = ?`, userID,
+		`SELECT role_id FROM users WHERE id = $1`, userID,
 	).Scan(&userRoleID); err != nil {
 		return fmt.Errorf("DeleteAccount fetch role: %w", err)
 	}
@@ -41,7 +41,7 @@ func (d *DB) DeleteAccount(ctx context.Context, userID int64) error {
 	if userRoleID == roleOwner || userRoleID == roleAdmin {
 		var adminCount int
 		if err := tx.QueryRowContext(ctx,
-			`SELECT COUNT(*) FROM users WHERE role_id IN (?, ?) AND id != ? AND banned = 0`,
+			`SELECT COUNT(*) FROM users WHERE role_id IN ($1, $2) AND id != $3 AND banned = 0`,
 			roleOwner, roleAdmin, userID,
 		).Scan(&adminCount); err != nil {
 			return fmt.Errorf("DeleteAccount count admins: %w", err)
@@ -56,11 +56,11 @@ func (d *DB) DeleteAccount(ctx context.Context, userID int64) error {
 		label string
 		query string
 	}{
-		{"sessions", `DELETE FROM sessions WHERE user_id = ?`},
-		{"dm_participants", `DELETE FROM dm_participants WHERE user_id = ?`},
-		{"dm_open_state", `DELETE FROM dm_open_state WHERE user_id = ?`},
-		{"reactions", `DELETE FROM reactions WHERE user_id = ?`},
-		{"read_states", `DELETE FROM read_states WHERE user_id = ?`},
+		{"sessions", `DELETE FROM sessions WHERE user_id = $1`},
+		{"dm_participants", `DELETE FROM dm_participants WHERE user_id = $1`},
+		{"dm_open_state", `DELETE FROM dm_open_state WHERE user_id = $1`},
+		{"reactions", `DELETE FROM reactions WHERE user_id = $1`},
+		{"read_states", `DELETE FROM read_states WHERE user_id = $1`},
 	}
 	for _, s := range stmts {
 		if _, err := tx.ExecContext(ctx, s.query, userID); err != nil {
@@ -71,7 +71,7 @@ func (d *DB) DeleteAccount(ctx context.Context, userID int64) error {
 	// Soft-delete messages: mark as deleted and clear content so the rows
 	// remain for conversation continuity but contain no personal data.
 	if _, err := tx.ExecContext(ctx,
-		`UPDATE messages SET deleted = 1, content = '' WHERE user_id = ?`,
+		`UPDATE messages SET deleted = 1, content = '' WHERE user_id = $1`,
 		userID,
 	); err != nil {
 		return fmt.Errorf("DeleteAccount messages: %w", err)
@@ -81,14 +81,14 @@ func (d *DB) DeleteAccount(ctx context.Context, userID int64) error {
 	anonUsername := fmt.Sprintf("[deleted-%d]", userID)
 	if _, err := tx.ExecContext(ctx,
 		`UPDATE users
-		 SET username    = ?,
+		 SET username    = $1,
 		     password    = '',
 		     avatar      = NULL,
 		     totp_secret = NULL,
 		     status      = 'offline',
 		     banned      = 1,
 		     ban_reason  = 'account deleted'
-		 WHERE id = ?`,
+		 WHERE id = $2`,
 		anonUsername, userID,
 	); err != nil {
 		return fmt.Errorf("DeleteAccount anonymise: %w", err)

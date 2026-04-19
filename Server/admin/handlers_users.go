@@ -98,7 +98,7 @@ func handlePatchUser(database *db.DB, hub HubBroadcaster) http.HandlerFunc {
 		}()
 
 		if req.RoleID != nil {
-			if _, err := tx.Exec(`UPDATE users SET role_id = ? WHERE id = ?`, *req.RoleID, id); err != nil {
+			if _, err := tx.Exec(`UPDATE users SET role_id = $1 WHERE id = $2`, *req.RoleID, id); err != nil {
 				writeErr(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to update role")
 				return
 			}
@@ -113,7 +113,7 @@ func handlePatchUser(database *db.DB, hub HubBroadcaster) http.HandlerFunc {
 			if *req.Banned {
 				var expiresStr *string
 				if _, err := tx.Exec(
-					`UPDATE users SET banned = 1, ban_reason = ?, ban_expires = ? WHERE id = ?`,
+					`UPDATE users SET banned = 1, ban_reason = $1, ban_expires = $2 WHERE id = $3`,
 					banReason, expiresStr, id,
 				); err != nil {
 					writeErr(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to ban user")
@@ -122,7 +122,7 @@ func handlePatchUser(database *db.DB, hub HubBroadcaster) http.HandlerFunc {
 				slog.Warn("user banned", "actor_id", actor, "target_user", user.Username, "reason", banReason)
 			} else {
 				if _, err := tx.Exec(
-					`UPDATE users SET banned = 0, ban_reason = NULL, ban_expires = NULL WHERE id = ?`,
+					`UPDATE users SET banned = 0, ban_reason = NULL, ban_expires = NULL WHERE id = $1`,
 					id,
 				); err != nil {
 					writeErr(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to unban user")

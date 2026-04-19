@@ -7,8 +7,9 @@ import (
 	"database/sql"
 	"fmt"
 
+	_ "github.com/lib/pq"
+	"github.com/owncord/server/config"
 	"github.com/owncord/server/migrations"
-	_ "modernc.org/sqlite" // register the sqlite3 driver
 )
 
 // DB wraps *sql.DB and exposes the subset of methods needed by the server.
@@ -16,10 +17,16 @@ type DB struct {
 	sqlDB *sql.DB
 }
 
-// Open opens (or creates) a SQLite database at path, enables WAL mode and
-// foreign key enforcement, and returns a ready-to-use DB.
+// Open opens (or creates) a Postgresql database, and returns a ready-to-use DB.
 func Open(path string) (*DB, error) {
-	sqlDB, err := sql.Open("sqlite", path)
+	var connectString string
+	cfg, err := config.Load("config.yaml")
+	if err != nil {
+		return nil, fmt.Errorf("loading config: %w", err)
+	}
+	connectString = fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", cfg.Database.Host, cfg.Database.Port, cfg.Database.User, cfg.Database.Password, cfg.Database.Database)
+
+	sqlDB, err := sql.Open("postgres", connectString)
 	if err != nil {
 		return nil, fmt.Errorf("opening sqlite db: %w", err)
 	}
@@ -36,42 +43,6 @@ func Open(path string) (*DB, error) {
 	// share the same in-memory state.
 	sqlDB.SetMaxOpenConns(1)
 
-	// Enable WAL mode for better concurrent read performance.
-	if _, err := sqlDB.Exec("PRAGMA journal_mode=WAL;"); err != nil {
-		_ = sqlDB.Close()
-		return nil, fmt.Errorf("enabling WAL mode: %w", err)
-	}
-
-	// Wait up to 5 seconds for the write lock instead of failing instantly.
-	if _, err := sqlDB.Exec("PRAGMA busy_timeout=5000;"); err != nil {
-		_ = sqlDB.Close()
-		return nil, fmt.Errorf("setting busy_timeout: %w", err)
-	}
-
-	// Enforce foreign key constraints.
-	if _, err := sqlDB.Exec("PRAGMA foreign_keys=ON;"); err != nil {
-		_ = sqlDB.Close()
-		return nil, fmt.Errorf("enabling foreign keys: %w", err)
-	}
-
-	// Performance tuning (safe with WAL mode).
-	if _, err := sqlDB.Exec("PRAGMA synchronous=NORMAL;"); err != nil {
-		_ = sqlDB.Close()
-		return nil, fmt.Errorf("setting synchronous mode: %w", err)
-	}
-	if _, err := sqlDB.Exec("PRAGMA temp_store=MEMORY;"); err != nil {
-		_ = sqlDB.Close()
-		return nil, fmt.Errorf("setting temp_store: %w", err)
-	}
-	if _, err := sqlDB.Exec("PRAGMA mmap_size=268435456;"); err != nil {
-		_ = sqlDB.Close()
-		return nil, fmt.Errorf("setting mmap_size: %w", err)
-	}
-	if _, err := sqlDB.Exec("PRAGMA cache_size=-64000;"); err != nil {
-		_ = sqlDB.Close()
-		return nil, fmt.Errorf("setting cache_size: %w", err)
-	}
-
 	return &DB{sqlDB: sqlDB}, nil
 }
 
@@ -85,8 +56,8 @@ func Migrate(database *DB) error {
 
 // Close releases the underlying database connection.
 func (d *DB) Close() error {
-	// Run PRAGMA optimize to analyze and update query planner statistics.
-	_, _ = d.sqlDB.Exec("PRAGMA optimize;")
+	// Run optimize to analyze and update query planner statistics.
+	_, _ = d.sqlDB.Exec("VACUUM FULL ANALYZE;")
 	return d.sqlDB.Close()
 }
 

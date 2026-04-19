@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -22,7 +23,7 @@ type Attachment struct {
 // width and height are optional image dimensions (pass nil for non-image files).
 func (d *DB) CreateAttachment(id, filename, storedAs, mimeType string, size int64, width, height *int) error {
 	_, err := d.sqlDB.Exec(
-		`INSERT INTO attachments (id, filename, stored_as, mime_type, size, width, height) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO attachments (id, filename, stored_as, mime_type, size, width, height) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 		id, filename, storedAs, mimeType, size, width, height,
 	)
 	if err != nil {
@@ -35,7 +36,7 @@ func (d *DB) CreateAttachment(id, filename, storedAs, mimeType string, size int6
 func (d *DB) GetAttachmentByID(id string) (*Attachment, error) {
 	row := d.sqlDB.QueryRow(
 		`SELECT id, message_id, filename, stored_as, mime_type, size, uploaded_at
-		 FROM attachments WHERE id = ?`, id,
+		 FROM attachments WHERE id = $1`, id,
 	)
 	a := &Attachment{}
 	err := row.Scan(&a.ID, &a.MessageID, &a.Filename, &a.StoredAs, &a.MimeType, &a.Size, &a.UploadedAt)
@@ -60,14 +61,12 @@ func (d *DB) LinkAttachmentsToMessage(messageID int64, attachmentIDs []string) (
 	args := make([]any, 0, len(attachmentIDs)+1)
 	args = append(args, messageID)
 	for i, id := range attachmentIDs {
-		placeholders[i] = "?"
+		// PlaceHolders для Postgresql - начинаются с $2
+		placeholders[i] = "$" + strconv.Itoa(i+2)
 		args = append(args, id)
 	}
 
-	query := fmt.Sprintf(
-		`UPDATE attachments SET message_id = ? WHERE id IN (%s) AND message_id IS NULL`,
-		strings.Join(placeholders, ","),
-	)
+	query := fmt.Sprintf(`UPDATE attachments SET message_id = $1 WHERE id IN (%s) AND message_id IS NULL`, strings.Join(placeholders, ","))
 	res, err := d.sqlDB.Exec(query, args...)
 	if err != nil {
 		return 0, fmt.Errorf("LinkAttachmentsToMessage: %w", err)
@@ -80,11 +79,11 @@ func (d *DB) GetAttachmentsByMessageIDs(msgIDs []int64) (map[int64][]AttachmentI
 	if len(msgIDs) == 0 {
 		return map[int64][]AttachmentInfo{}, nil
 	}
-
+	// PlaceHolders для Postgresql - начинаются с $1
 	placeholders := make([]string, len(msgIDs))
 	args := make([]any, len(msgIDs))
 	for i, id := range msgIDs {
-		placeholders[i] = "?"
+		placeholders[i] = "$" + strconv.Itoa(i+1)
 		args[i] = id
 	}
 
@@ -122,7 +121,7 @@ func (d *DB) GetAttachmentsByMessageIDs(msgIDs []int64) (map[int64][]AttachmentI
 // Returns the stored_as filenames of deleted records so the caller can remove files.
 func (d *DB) DeleteOrphanedAttachments(cutoff string) ([]string, error) {
 	rows, err := d.sqlDB.Query(
-		`SELECT stored_as FROM attachments WHERE message_id IS NULL AND uploaded_at < ?`,
+		`SELECT stored_as FROM attachments WHERE message_id IS NULL AND uploaded_at < $1`,
 		cutoff,
 	)
 	if err != nil {
@@ -144,7 +143,7 @@ func (d *DB) DeleteOrphanedAttachments(cutoff string) ([]string, error) {
 
 	if len(files) > 0 {
 		_, err = d.sqlDB.Exec(
-			`DELETE FROM attachments WHERE message_id IS NULL AND uploaded_at < ?`,
+			`DELETE FROM attachments WHERE message_id IS NULL AND uploaded_at < $1`,
 			cutoff,
 		)
 		if err != nil {

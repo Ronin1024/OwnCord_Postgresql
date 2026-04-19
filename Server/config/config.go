@@ -34,12 +34,12 @@ type GitHubConfig struct {
 
 // VoiceConfig holds LiveKit server connection and voice quality settings.
 type VoiceConfig struct {
-	LiveKitAPIKey    string `koanf:"livekit_api_key"`    // LiveKit API key
-	LiveKitAPISecret string `koanf:"livekit_api_secret"` // LiveKit API secret
-	LiveKitURL       string `koanf:"livekit_url"`        // LiveKit server WebSocket URL (e.g. ws://localhost:7880)
-	LiveKitBinaryPath string `koanf:"livekit_binary"`    // path to livekit-server binary; empty = don't auto-start
-	NodeIP           string `koanf:"node_ip"`            // public IP for WebRTC ICE candidates; empty = auto-detect
-	Quality          string `koanf:"quality"`            // low | medium | high
+	LiveKitAPIKey     string `koanf:"livekit_api_key"`    // LiveKit API key
+	LiveKitAPISecret  string `koanf:"livekit_api_secret"` // LiveKit API secret
+	LiveKitURL        string `koanf:"livekit_url"`        // LiveKit server WebSocket URL (e.g. ws://localhost:7880)
+	LiveKitBinaryPath string `koanf:"livekit_binary"`     // path to livekit-server binary; empty = don't auto-start
+	NodeIP            string `koanf:"node_ip"`            // public IP for WebRTC ICE candidates; empty = auto-detect
+	Quality           string `koanf:"quality"`            // low | medium | high
 }
 
 // ServerConfig holds HTTP server settings.
@@ -54,7 +54,12 @@ type ServerConfig struct {
 
 // DatabaseConfig holds database settings.
 type DatabaseConfig struct {
-	Path string `koanf:"path"`
+	Path     string `koanf:"path"` // Depricated. Old style of sqlite version
+	Host     string `koanf:"host"`
+	Port     int    `koanf:"port"`
+	Database string `koanf:"database"`
+	User     string `koanf:"user"`
+	Password string `koanf:"password"`
 }
 
 // TLSConfig holds TLS/certificate settings.
@@ -82,16 +87,21 @@ func defaults() Config {
 			AllowedOrigins: []string{"*"},
 			TrustedProxies: []string{},
 			AdminAllowedCIDRs: []string{
-				"127.0.0.0/8",     // localhost IPv4
-				"::1/128",         // localhost IPv6
-				"10.0.0.0/8",      // private class A
-				"172.16.0.0/12",   // private class B
-				"192.168.0.0/16",  // private class C
-				"fc00::/7",        // IPv6 unique local
+				"127.0.0.0/8",    // localhost IPv4
+				"::1/128",        // localhost IPv6
+				"10.0.0.0/8",     // private class A
+				"172.16.0.0/12",  // private class B
+				"192.168.0.0/16", // private class C
+				"fc00::/7",       // IPv6 unique local
 			},
 		},
 		Database: DatabaseConfig{
-			Path: "data/chatserver.db",
+			Path:     "data/chatserver.db",
+			Host:     "localhost",
+			Port:     5432,
+			Database: "owncord",
+			User:     "owncord",
+			Password: "",
 		},
 		TLS: TLSConfig{
 			Mode:         "self_signed",
@@ -128,6 +138,11 @@ server:
 
 database:
   path: "data/chatserver.db"
+  host: "192.168.1.2"
+  port: 5432
+  database: "owncord"
+  user: "owncord"
+  password: "owncord"
 
 tls:
   mode: "self_signed"  # self_signed, acme, manual, off

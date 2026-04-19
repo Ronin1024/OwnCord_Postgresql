@@ -36,10 +36,10 @@ CREATE TABLE IF NOT EXISTS roles (
     position    INTEGER NOT NULL DEFAULT 0,
     is_default  INTEGER NOT NULL DEFAULT 0
 );
-INSERT OR IGNORE INTO roles (id, name, color, permissions, position, is_default) VALUES
+INSERT INTO roles (id, name, color, permissions, position, is_default) VALUES
     (1, 'Owner', '#E74C3C', 2147483647, 100, 0),
     (2, 'Admin', '#F39C12', 1073741823,  80, 0),
-    (3, 'Member', NULL,    1635,     40, 1);
+    (3, 'Member', NULL,    1635,     40, 1) ON CONFLICT DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS users (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS users (
     role_id     INTEGER NOT NULL DEFAULT 3 REFERENCES roles(id),
     totp_secret TEXT,
     status      TEXT    NOT NULL DEFAULT 'offline',
-    created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    created_at  TEXT    NOT NULL DEFAULT (TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS')),
     last_seen   TEXT,
     banned      INTEGER NOT NULL DEFAULT 0,
     ban_reason  TEXT,
@@ -61,8 +61,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     token      TEXT    NOT NULL UNIQUE,
     device     TEXT,
     ip_address TEXT,
-    created_at TEXT    NOT NULL DEFAULT (datetime('now')),
-    last_used  TEXT    NOT NULL DEFAULT (datetime('now')),
+    created_at TEXT    NOT NULL DEFAULT (TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS')),
+    last_used  TEXT    NOT NULL DEFAULT (TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS')),
     expires_at TEXT    NOT NULL
 );
 CREATE TABLE IF NOT EXISTS audit_log (
@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
     target_type TEXT    NOT NULL DEFAULT '',
     target_id   INTEGER NOT NULL DEFAULT 0,
     detail      TEXT    NOT NULL DEFAULT '',
-    created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+    created_at  TEXT    NOT NULL DEFAULT (TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS'))
 );
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS channels (
@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS channels (
     position         INTEGER NOT NULL DEFAULT 0,
     slow_mode        INTEGER NOT NULL DEFAULT 0,
     archived         INTEGER NOT NULL DEFAULT 0,
-    created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
+    created_at       TEXT    NOT NULL DEFAULT (TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS')),
     voice_max_users  INTEGER NOT NULL DEFAULT 0,
     voice_quality    TEXT,
     mixing_threshold INTEGER,
@@ -97,7 +97,7 @@ CREATE TABLE IF NOT EXISTS messages (
     content    TEXT    NOT NULL,
     deleted    INTEGER NOT NULL DEFAULT 0,
     pinned     INTEGER NOT NULL DEFAULT 0,
-    timestamp  TEXT    NOT NULL DEFAULT (datetime('now')),
+    timestamp  TEXT    NOT NULL DEFAULT (TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS')),
     reply_to   INTEGER REFERENCES messages(id) ON DELETE SET NULL,
     edited_at  TEXT
 );
@@ -108,7 +108,7 @@ CREATE TABLE IF NOT EXISTS invites (
     max_uses    INTEGER,
     use_count   INTEGER NOT NULL DEFAULT 0,
     expires_at  TEXT,
-    created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    created_at  TEXT    NOT NULL DEFAULT (TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS')),
     revoked     INTEGER NOT NULL DEFAULT 0
 );
 `)
@@ -401,7 +401,7 @@ func (m *mockHubWB) BroadcastChannelUpdate(ch *db.Channel)                  {}
 func (m *mockHubWB) BroadcastChannelDelete(channelID int64)                 {}
 func (m *mockHubWB) BroadcastMemberBan(userID int64)                        {}
 func (m *mockHubWB) BroadcastMemberUpdate(userID int64, roleName string)    {}
-func (m *mockHubWB) ClientCount() int                                        { return 0 }
+func (m *mockHubWB) ClientCount() int                                       { return 0 }
 
 // TestSpawnDetached_ValidExecutable verifies that spawnDetached can start a
 // real executable (the Go test binary itself) with a flag that causes immediate

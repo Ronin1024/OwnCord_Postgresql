@@ -64,7 +64,7 @@ func handlePatchSettings(database *db.DB) http.HandlerFunc {
 		}
 		for key, value := range normalizedUpdates {
 			if _, txErr := tx.Exec(
-				`INSERT INTO settings (key, value) VALUES (?, ?)
+				`INSERT INTO settings (key, value) VALUES ($1, $2)
 				 ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
 				key, value,
 			); txErr != nil {

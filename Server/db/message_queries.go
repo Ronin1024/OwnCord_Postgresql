@@ -4,20 +4,22 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
 // CreateMessage inserts a new message and returns the assigned ID.
 // Content should already be sanitized before calling this function.
 func (d *DB) CreateMessage(channelID, userID int64, content string, replyTo *int64) (int64, error) {
-	res, err := d.sqlDB.Exec(
-		`INSERT INTO messages (channel_id, user_id, content, reply_to) VALUES (?, ?, ?, ?)`,
+	var ID int64
+	err := d.sqlDB.QueryRow(
+		`INSERT INTO messages (channel_id, user_id, content, reply_to) VALUES ($1, $2, $3, $4) RETURNING id`,
 		channelID, userID, content, replyTo,
-	)
+	).Scan(&ID)
 	if err != nil {
 		return 0, fmt.Errorf("CreateMessage: %w", err)
 	}
-	return res.LastInsertId()
+	return ID, err
 }
 
 // GetMessage returns the message with the given ID, or nil if not found.
@@ -25,7 +27,7 @@ func (d *DB) CreateMessage(channelID, userID int64, content string, replyTo *int
 func (d *DB) GetMessage(id int64) (*Message, error) {
 	row := d.sqlDB.QueryRow(
 		`SELECT id, channel_id, user_id, content, reply_to, edited_at, deleted, pinned, timestamp
-		 FROM messages WHERE id = ?`,
+		 FROM messages WHERE id = $1`,
 		id,
 	)
 	return scanMessage(row)
@@ -44,8 +46,8 @@ func (d *DB) GetMessages(channelID, before int64, limit int) ([]MessageWithUser,
 			        m.edited_at, m.deleted, m.pinned, m.timestamp,
 			        u.username, u.avatar
 			 FROM messages m JOIN users u ON m.user_id = u.id
-			 WHERE m.channel_id = ? AND m.id < ? AND m.deleted = 0
-			 ORDER BY m.id DESC LIMIT ?`,
+			 WHERE m.channel_id = $1 AND m.id < $2 AND m.deleted = 0
+			 ORDER BY m.id DESC LIMIT $3`,
 			channelID, before, limit,
 		)
 	} else {
@@ -54,8 +56,8 @@ func (d *DB) GetMessages(channelID, before int64, limit int) ([]MessageWithUser,
 			        m.edited_at, m.deleted, m.pinned, m.timestamp,
 			        u.username, u.avatar
 			 FROM messages m JOIN users u ON m.user_id = u.id
-			 WHERE m.channel_id = ? AND m.deleted = 0
-			 ORDER BY m.id DESC LIMIT ?`,
+			 WHERE m.channel_id = $1 AND m.deleted = 0
+			 ORDER BY m.id DESC LIMIT $2`,
 			channelID, limit,
 		)
 	}
@@ -96,7 +98,7 @@ func (d *DB) EditMessage(id, userID int64, content string) error {
 	}
 
 	_, err = d.sqlDB.Exec(
-		`UPDATE messages SET content = ?, edited_at = datetime('now') WHERE id = ?`,
+		`UPDATE messages SET content = $1, edited_at = TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS') WHERE id = $2`,
 		content, id,
 	)
 	if err != nil {
@@ -119,7 +121,7 @@ func (d *DB) DeleteMessage(id, userID int64, ismod bool) error {
 		return fmt.Errorf("DeleteMessage: user %d does not own message %d: %w", userID, id, ErrForbidden)
 	}
 
-	_, err = d.sqlDB.Exec(`UPDATE messages SET deleted = 1 WHERE id = ?`, id)
+	_, err = d.sqlDB.Exec(`UPDATE messages SET deleted = 1 WHERE id = $1`, id)
 	if err != nil {
 		return fmt.Errorf("DeleteMessage: %w", err)
 	}
@@ -129,7 +131,7 @@ func (d *DB) DeleteMessage(id, userID int64, ismod bool) error {
 // AddReaction inserts a reaction. Returns an error on duplicate (same user+emoji+message).
 func (d *DB) AddReaction(messageID, userID int64, emoji string) error {
 	_, err := d.sqlDB.Exec(
-		`INSERT INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)`,
+		`INSERT INTO reactions (message_id, user_id, emoji) VALUES ($1, $2, $3)`,
 		messageID, userID, emoji,
 	)
 	if err != nil {
@@ -141,7 +143,7 @@ func (d *DB) AddReaction(messageID, userID int64, emoji string) error {
 // RemoveReaction deletes a reaction. Returns an error if it does not exist.
 func (d *DB) RemoveReaction(messageID, userID int64, emoji string) error {
 	res, err := d.sqlDB.Exec(
-		`DELETE FROM reactions WHERE message_id = ? AND user_id = ? AND emoji = ?`,
+		`DELETE FROM reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3`,
 		messageID, userID, emoji,
 	)
 	if err != nil {
@@ -158,7 +160,7 @@ func (d *DB) RemoveReaction(messageID, userID int64, emoji string) error {
 // MeReacted is always false here (caller passes requesting userID if needed).
 func (d *DB) GetReactions(messageID int64) ([]ReactionCount, error) {
 	rows, err := d.sqlDB.Query(
-		`SELECT emoji, COUNT(*) FROM reactions WHERE message_id = ? GROUP BY emoji`,
+		`SELECT emoji, COUNT(*) FROM reactions WHERE message_id = $1 GROUP BY emoji`,
 		messageID,
 	)
 	if err != nil {
@@ -206,8 +208,8 @@ func (d *DB) SearchMessages(query string, channelID *int64, limit int) ([]Messag
 			 JOIN messages m ON f.rowid = m.id
 			 JOIN channels c ON m.channel_id = c.id
 			 JOIN users u ON m.user_id = u.id
-			 WHERE messages_fts MATCH ? AND m.channel_id = ? AND m.deleted = 0
-			 ORDER BY rank LIMIT ?`,
+			 WHERE messages_fts MATCH $1 AND m.channel_id = $2 AND m.deleted = 0
+			 ORDER BY rank LIMIT $3`,
 			query, *channelID, limit,
 		)
 	} else {
@@ -217,8 +219,8 @@ func (d *DB) SearchMessages(query string, channelID *int64, limit int) ([]Messag
 			 JOIN messages m ON f.rowid = m.id
 			 JOIN channels c ON m.channel_id = c.id
 			 JOIN users u ON m.user_id = u.id
-			 WHERE messages_fts MATCH ? AND m.deleted = 0
-			 ORDER BY rank LIMIT ?`,
+			 WHERE messages_fts MATCH $1 AND m.deleted = 0
+			 ORDER BY rank LIMIT $2`,
 			query, limit,
 		)
 	}
@@ -258,8 +260,8 @@ func (d *DB) GetMessagesForAPI(channelID, before int64, limit int, requestingUse
 			`SELECT m.id, m.channel_id, m.user_id, u.username, u.avatar,
 			        m.content, m.reply_to, m.edited_at, m.deleted, m.pinned, m.timestamp
 			 FROM messages m JOIN users u ON m.user_id = u.id
-			 WHERE m.channel_id = ? AND m.id < ? AND m.deleted = 0
-			 ORDER BY m.id DESC LIMIT ?`,
+			 WHERE m.channel_id = $1 AND m.id < $2 AND m.deleted = 0
+			 ORDER BY m.id DESC LIMIT $3`,
 			channelID, before, limit,
 		)
 	} else {
@@ -267,8 +269,8 @@ func (d *DB) GetMessagesForAPI(channelID, before int64, limit int, requestingUse
 			`SELECT m.id, m.channel_id, m.user_id, u.username, u.avatar,
 			        m.content, m.reply_to, m.edited_at, m.deleted, m.pinned, m.timestamp
 			 FROM messages m JOIN users u ON m.user_id = u.id
-			 WHERE m.channel_id = ? AND m.deleted = 0
-			 ORDER BY m.id DESC LIMIT ?`,
+			 WHERE m.channel_id = $1 AND m.deleted = 0
+			 ORDER BY m.id DESC LIMIT $2`,
 			channelID, limit,
 		)
 	}
@@ -293,7 +295,8 @@ func (d *DB) getReactionsBatch(msgIDs []int64, requestingUserID int64) (map[int6
 		if i > 0 {
 			sb.WriteByte(',')
 		}
-		sb.WriteByte('?')
+		sb.WriteByte('$')
+		sb.WriteString(strconv.Itoa(i + 2))
 		args = append(args, id)
 	}
 	placeholders := sb.String()
@@ -301,7 +304,7 @@ func (d *DB) getReactionsBatch(msgIDs []int64, requestingUserID int64) (map[int6
 	// Query: aggregate count + check if requesting user reacted.
 	query := fmt.Sprintf(
 		`SELECT r.message_id, r.emoji, COUNT(*) as cnt,
-		        MAX(CASE WHEN r.user_id = ? THEN 1 ELSE 0 END) as me
+		        MAX(CASE WHEN r.user_id = $1 THEN 1 ELSE 0 END) as me
 		 FROM reactions r
 		 WHERE r.message_id IN (%s)
 		 GROUP BY r.message_id, r.emoji`,
@@ -336,7 +339,7 @@ func (d *DB) getReactionsBatch(msgIDs []int64, requestingUserID int64) (map[int6
 func (d *DB) UpdateReadState(userID, channelID, lastReadMessageID int64) error {
 	_, err := d.sqlDB.Exec(
 		`INSERT INTO read_states (user_id, channel_id, last_message_id)
-		 VALUES (?, ?, ?)
+		 VALUES ($1, $2, $3)
 		 ON CONFLICT(user_id, channel_id) DO UPDATE SET last_message_id = excluded.last_message_id`,
 		userID, channelID, lastReadMessageID,
 	)
@@ -355,7 +358,7 @@ func (d *DB) GetChannelUnreadCounts(userID int64) (map[int64]ChannelUnread, erro
 		        COUNT(CASE WHEN m.id > COALESCE(rs.last_message_id, 0) AND m.deleted = 0 THEN 1 END) AS unread
 		 FROM channels c
 		 LEFT JOIN messages m ON m.channel_id = c.id AND m.deleted = 0
-		 LEFT JOIN read_states rs ON rs.channel_id = c.id AND rs.user_id = ?
+		 LEFT JOIN read_states rs ON rs.channel_id = c.id AND rs.user_id = $1
 		 WHERE c.type = 'text'
 		 GROUP BY c.id`,
 		userID,
@@ -384,7 +387,7 @@ func (d *DB) GetChannelUnreadCounts(userID int64) (map[int64]ChannelUnread, erro
 func (d *DB) GetLatestMessageID(channelID int64) (int64, error) {
 	var id int64
 	err := d.sqlDB.QueryRow(
-		`SELECT COALESCE(MAX(id), 0) FROM messages WHERE channel_id = ? AND deleted = 0`,
+		`SELECT COALESCE(MAX(id), 0) FROM messages WHERE channel_id = $1 AND deleted = 0`,
 		channelID,
 	).Scan(&id)
 	if err != nil {
@@ -400,7 +403,7 @@ func (d *DB) GetPinnedMessages(channelID int64, requestingUserID int64) ([]Messa
 		`SELECT m.id, m.channel_id, m.user_id, u.username, u.avatar,
 		        m.content, m.reply_to, m.edited_at, m.deleted, m.pinned, m.timestamp
 		 FROM messages m JOIN users u ON m.user_id = u.id
-		 WHERE m.channel_id = ? AND m.pinned = 1 AND m.deleted = 0
+		 WHERE m.channel_id = $1 AND m.pinned = 1 AND m.deleted = 0
 		 ORDER BY m.id DESC`,
 		channelID,
 	)
@@ -472,7 +475,8 @@ func (d *DB) SetMessagePinned(id int64, pinned bool) error {
 	if pinned {
 		val = 1
 	}
-	res, err := d.sqlDB.Exec(`UPDATE messages SET pinned = ? WHERE id = ? AND deleted = 0`, val, id)
+
+	res, err := d.sqlDB.Exec(`UPDATE messages SET pinned = $1 WHERE id = $2 AND deleted = 0`, val, id)
 	if err != nil {
 		return fmt.Errorf("SetMessagePinned: %w", err)
 	}

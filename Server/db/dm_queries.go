@@ -11,12 +11,12 @@ import (
 
 // DMChannelInfo holds a DM channel summary for the channel list.
 type DMChannelInfo struct {
-	ChannelID     int64   `json:"channel_id"`
-	Recipient     DMUser  `json:"recipient"`
-	LastMessageID *int64  `json:"last_message_id"`
-	LastMessage   string  `json:"last_message"`
-	LastMessageAt string  `json:"last_message_at"`
-	UnreadCount   int     `json:"unread_count"`
+	ChannelID     int64  `json:"channel_id"`
+	Recipient     DMUser `json:"recipient"`
+	LastMessageID *int64 `json:"last_message_id"`
+	LastMessage   string `json:"last_message"`
+	LastMessageAt string `json:"last_message_at"`
+	UnreadCount   int    `json:"unread_count"`
 }
 
 // DMUser is the public-facing shape for a DM participant.
@@ -48,7 +48,7 @@ func (d *DB) GetOrCreateDMChannel(user1ID, user2ID int64) (*Channel, bool, error
 		`SELECT dp1.channel_id FROM dm_participants dp1
 		 JOIN dm_participants dp2 ON dp1.channel_id = dp2.channel_id
 		 JOIN channels c ON c.id = dp1.channel_id
-		 WHERE dp1.user_id = ? AND dp2.user_id = ? AND c.type = 'dm'
+		 WHERE dp1.user_id = $1 AND dp2.user_id = $2 AND c.type = 'dm'
 		 LIMIT 1`,
 		user1ID, user2ID,
 	).Scan(&existingID)
@@ -58,7 +58,7 @@ func (d *DB) GetOrCreateDMChannel(user1ID, user2ID int64) (*Channel, bool, error
 		// is idempotent). Without this, a user who previously closed the DM would
 		// not see it in their sidebar after the other party re-initiates.
 		_, _ = tx.Exec(
-			`INSERT OR IGNORE INTO dm_open_state (user_id, channel_id) VALUES (?, ?)`,
+			`INSERT INTO dm_open_state (user_id, channel_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
 			user1ID, existingID,
 		)
 		if commitErr := tx.Commit(); commitErr != nil {
@@ -81,14 +81,15 @@ func (d *DB) GetOrCreateDMChannel(user1ID, user2ID int64) (*Channel, bool, error
 	// No existing DM — create one inside the same transaction.
 
 	// Insert channel with type 'dm' and empty name.
-	res, err := tx.Exec(
-		`INSERT INTO channels (name, type) VALUES ('', 'dm')`,
-	)
+	var ID int64
+	err = d.sqlDB.QueryRow(
+		`INSERT INTO channels (name, type) VALUES ('', 'dm') RETURNING id`,
+	).Scan(&ID)
 	if err != nil {
 		_ = tx.Rollback()
 		return nil, false, fmt.Errorf("GetOrCreateDMChannel insert channel: %w", err)
 	}
-	channelID, err := res.LastInsertId()
+	channelID, err := ID, nil
 	if err != nil {
 		_ = tx.Rollback()
 		return nil, false, fmt.Errorf("GetOrCreateDMChannel last insert id: %w", err)
@@ -96,7 +97,7 @@ func (d *DB) GetOrCreateDMChannel(user1ID, user2ID int64) (*Channel, bool, error
 
 	// Insert both participants.
 	_, err = tx.Exec(
-		`INSERT INTO dm_participants (channel_id, user_id) VALUES (?, ?), (?, ?)`,
+		`INSERT INTO dm_participants (channel_id, user_id) VALUES ($1, $2), ($3, $4)`,
 		channelID, user1ID, channelID, user2ID,
 	)
 	if err != nil {
@@ -106,7 +107,7 @@ func (d *DB) GetOrCreateDMChannel(user1ID, user2ID int64) (*Channel, bool, error
 
 	// Open the DM for both users.
 	_, err = tx.Exec(
-		`INSERT OR IGNORE INTO dm_open_state (user_id, channel_id) VALUES (?, ?), (?, ?)`,
+		`INSERT INTO dm_open_state (user_id, channel_id) VALUES ($1, $2), ($3, $4) ON CONFLICT DO NOTHING`,
 		user1ID, channelID, user2ID, channelID,
 	)
 	if err != nil {
@@ -149,15 +150,24 @@ func (d *DB) GetUserDMChannels(userID int64) ([]DMChannelInfo, error) {
 		               AND m_unread.deleted = 0 THEN 1 END) AS unread_count
 		 FROM dm_open_state dos
 		 JOIN channels c          ON c.id = dos.channel_id AND c.type = 'dm'
-		 JOIN dm_participants dp  ON dp.channel_id = c.id AND dp.user_id != ?
+		 JOIN dm_participants dp  ON dp.channel_id = c.id AND dp.user_id != $1
 		 JOIN users u             ON u.id = dp.user_id
 		 LEFT JOIN messages lm    ON lm.id = (
 		     SELECT MAX(id) FROM messages WHERE channel_id = c.id AND deleted = 0
 		 )
 		 LEFT JOIN messages m_unread ON m_unread.channel_id = c.id
-		 LEFT JOIN read_states rs ON rs.channel_id = c.id AND rs.user_id = ?
-		 WHERE dos.user_id = ?
-		 GROUP BY c.id
+		 LEFT JOIN read_states rs ON rs.channel_id = c.id AND rs.user_id = $2
+		 WHERE dos.user_id = $3
+		 GROUP BY 
+				c.id,
+				u.id, 
+				u.username, 
+				u.avatar, 
+				u.status,
+				lm.id,
+				lm.content,
+				lm.timestamp,
+				dos.opened_at
 		 ORDER BY COALESCE(lm.timestamp, dos.opened_at) DESC`,
 		userID, userID, userID,
 	)
@@ -203,7 +213,7 @@ func (d *DB) GetUserDMChannels(userID int64) ([]DMChannelInfo, error) {
 // OpenDM adds a DM channel to a user's open list (idempotent).
 func (d *DB) OpenDM(userID, channelID int64) error {
 	_, err := d.sqlDB.Exec(
-		`INSERT OR IGNORE INTO dm_open_state (user_id, channel_id) VALUES (?, ?)`,
+		`INSERT INTO dm_open_state (user_id, channel_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
 		userID, channelID,
 	)
 	if err != nil {
@@ -215,7 +225,7 @@ func (d *DB) OpenDM(userID, channelID int64) error {
 // CloseDM removes a DM channel from a user's open list.
 func (d *DB) CloseDM(userID, channelID int64) error {
 	_, err := d.sqlDB.Exec(
-		`DELETE FROM dm_open_state WHERE user_id = ? AND channel_id = ?`,
+		`DELETE FROM dm_open_state WHERE user_id = $1 AND channel_id = $2`,
 		userID, channelID,
 	)
 	if err != nil {
@@ -230,7 +240,7 @@ func (d *DB) CloseDM(userID, channelID int64) error {
 func (d *DB) IsDMParticipant(userID, channelID int64) (bool, error) {
 	var id int64
 	err := d.sqlDB.QueryRow(
-		`SELECT user_id FROM dm_participants WHERE user_id = ? AND channel_id = ?`,
+		`SELECT user_id FROM dm_participants WHERE user_id = $1 AND channel_id = $2`,
 		userID, channelID,
 	).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -245,7 +255,7 @@ func (d *DB) IsDMParticipant(userID, channelID int64) (bool, error) {
 // GetDMParticipantIDs returns all participant user IDs for a DM channel.
 func (d *DB) GetDMParticipantIDs(channelID int64) ([]int64, error) {
 	rows, err := d.sqlDB.Query(
-		`SELECT user_id FROM dm_participants WHERE channel_id = ?`,
+		`SELECT user_id FROM dm_participants WHERE channel_id = $1`,
 		channelID,
 	)
 	if err != nil {
@@ -272,7 +282,7 @@ func (d *DB) GetDMRecipient(channelID, requestingUserID int64) (*User, error) {
 	var recipientID int64
 	err := d.sqlDB.QueryRow(
 		`SELECT user_id FROM dm_participants
-		 WHERE channel_id = ? AND user_id != ?
+		 WHERE channel_id = $1 AND user_id != $2
 		 LIMIT 1`,
 		channelID, requestingUserID,
 	).Scan(&recipientID)

@@ -9,7 +9,7 @@ import (
 // GetRoleByID returns the role with the given ID, or nil if not found.
 func (d *DB) GetRoleByID(id int64) (*Role, error) {
 	row := d.sqlDB.QueryRow(
-		`SELECT id, name, color, permissions, position, is_default FROM roles WHERE id = ?`,
+		`SELECT id, name, color, permissions, position, is_default FROM roles WHERE id = $1`,
 		id,
 	)
 	r := &Role{}

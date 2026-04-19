@@ -12,7 +12,7 @@ import (
 func (d *DB) JoinVoiceChannel(userID, channelID int64) error {
 	_, err := d.sqlDB.Exec(
 		`INSERT INTO voice_states (user_id, channel_id, muted, deafened, speaking, camera, screenshare)
-		 VALUES (?, ?, 0, 0, 0, 0, 0)
+		 VALUES ($1, $2, 0, 0, 0, 0, 0)
 		 ON CONFLICT(user_id) DO UPDATE SET
 		     channel_id  = excluded.channel_id,
 		     muted       = 0,
@@ -20,7 +20,7 @@ func (d *DB) JoinVoiceChannel(userID, channelID int64) error {
 		     speaking    = 0,
 		     camera      = 0,
 		     screenshare = 0,
-		     joined_at   = datetime('now')`,
+		     joined_at   = TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS')`,
 		userID, channelID,
 	)
 	if err != nil {
@@ -32,7 +32,7 @@ func (d *DB) JoinVoiceChannel(userID, channelID int64) error {
 // LeaveVoiceChannel removes the user's voice state entirely.
 // It is safe to call when the user is not in any voice channel.
 func (d *DB) LeaveVoiceChannel(userID int64) error {
-	_, err := d.sqlDB.Exec(`DELETE FROM voice_states WHERE user_id = ?`, userID)
+	_, err := d.sqlDB.Exec(`DELETE FROM voice_states WHERE user_id = $1`, userID)
 	if err != nil {
 		return fmt.Errorf("LeaveVoiceChannel: %w", err)
 	}
@@ -48,7 +48,7 @@ func (d *DB) GetVoiceState(userID int64) (*VoiceState, error) {
 		        vs.camera, vs.screenshare
 		 FROM voice_states vs
 		 JOIN users u ON u.id = vs.user_id
-		 WHERE vs.user_id = ?`,
+		 WHERE vs.user_id = $1`,
 		userID,
 	)
 	return scanVoiceState(row)
@@ -63,7 +63,7 @@ func (d *DB) GetChannelVoiceStates(channelID int64) ([]VoiceState, error) {
 		        vs.camera, vs.screenshare
 		 FROM voice_states vs
 		 JOIN users u ON u.id = vs.user_id
-		 WHERE vs.channel_id = ?
+		 WHERE vs.channel_id = $1
 		 ORDER BY vs.joined_at ASC`,
 		channelID,
 	)
@@ -127,7 +127,7 @@ func (d *DB) GetAllVoiceStates() ([]VoiceState, error) {
 func (d *DB) UpdateVoiceMute(userID int64, muted bool) error {
 	muteInt := boolToInt(muted)
 	_, err := d.sqlDB.Exec(
-		`UPDATE voice_states SET muted = ? WHERE user_id = ?`,
+		`UPDATE voice_states SET muted = $1 WHERE user_id = $2`,
 		muteInt, userID,
 	)
 	if err != nil {
@@ -141,7 +141,7 @@ func (d *DB) UpdateVoiceMute(userID int64, muted bool) error {
 func (d *DB) UpdateVoiceDeafen(userID int64, deafened bool) error {
 	deafenInt := boolToInt(deafened)
 	_, err := d.sqlDB.Exec(
-		`UPDATE voice_states SET deafened = ? WHERE user_id = ?`,
+		`UPDATE voice_states SET deafened = $1 WHERE user_id = $2`,
 		deafenInt, userID,
 	)
 	if err != nil {
@@ -153,7 +153,7 @@ func (d *DB) UpdateVoiceDeafen(userID int64, deafened bool) error {
 // ClearVoiceState removes a user's voice state on disconnect.
 // Equivalent to LeaveVoiceChannel but named to clarify the disconnect use case.
 func (d *DB) ClearVoiceState(userID int64) error {
-	_, err := d.sqlDB.Exec(`DELETE FROM voice_states WHERE user_id = ?`, userID)
+	_, err := d.sqlDB.Exec(`DELETE FROM voice_states WHERE user_id = $1`, userID)
 	if err != nil {
 		return fmt.Errorf("ClearVoiceState: %w", err)
 	}
@@ -176,7 +176,7 @@ func (d *DB) ClearAllVoiceStates() error {
 func (d *DB) CountActiveCameras(channelID int64) (int, error) {
 	var count int
 	err := d.sqlDB.QueryRow(
-		`SELECT COUNT(*) FROM voice_states WHERE channel_id = ? AND camera = 1`,
+		`SELECT COUNT(*) FROM voice_states WHERE channel_id = $1 AND camera = 1`,
 		channelID,
 	).Scan(&count)
 	if err != nil {
@@ -188,7 +188,7 @@ func (d *DB) CountActiveCameras(channelID int64) (int, error) {
 // UpdateVoiceCamera sets the camera field for the given user's voice state.
 func (d *DB) UpdateVoiceCamera(userID int64, camera bool) error {
 	_, err := d.sqlDB.Exec(
-		`UPDATE voice_states SET camera = ? WHERE user_id = ?`,
+		`UPDATE voice_states SET camera = $1 WHERE user_id = $2`,
 		boolToInt(camera), userID,
 	)
 	if err != nil {
@@ -200,7 +200,7 @@ func (d *DB) UpdateVoiceCamera(userID int64, camera bool) error {
 // UpdateVoiceScreenshare sets the screenshare field for the given user's voice state.
 func (d *DB) UpdateVoiceScreenshare(userID int64, screenshare bool) error {
 	_, err := d.sqlDB.Exec(
-		`UPDATE voice_states SET screenshare = ? WHERE user_id = ?`,
+		`UPDATE voice_states SET screenshare = $1 WHERE user_id = $2`,
 		boolToInt(screenshare), userID,
 	)
 	if err != nil {
@@ -214,7 +214,7 @@ func (d *DB) UpdateVoiceScreenshare(userID int64, screenshare bool) error {
 func (d *DB) CountChannelVoiceUsers(channelID int64) (int, error) {
 	var count int
 	err := d.sqlDB.QueryRow(
-		`SELECT COUNT(*) FROM voice_states WHERE channel_id = ?`,
+		`SELECT COUNT(*) FROM voice_states WHERE channel_id = $1`,
 		channelID,
 	).Scan(&count)
 	if err != nil {

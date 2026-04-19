@@ -261,7 +261,7 @@ func TestExec(t *testing.T) {
 	}
 
 	// Insert a settings row using Exec.
-	_, err := database.Exec("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", "test_key", "test_val")
+	_, err := database.Exec("INSERT OR REPLACE INTO settings (key, value) VALUES ($1, $2)", "test_key", "test_val")
 	if err != nil {
 		t.Fatalf("Exec() error: %v", err)
 	}
@@ -367,12 +367,12 @@ func (d *fakeDir) ReadDir(n int) ([]fs.DirEntry, error) {
 
 type fakeDirInfo struct{}
 
-func (fakeDirInfo) Name() string      { return "." }
-func (fakeDirInfo) Size() int64       { return 0 }
-func (fakeDirInfo) Mode() fs.FileMode { return fs.ModeDir | 0o755 }
+func (fakeDirInfo) Name() string       { return "." }
+func (fakeDirInfo) Size() int64        { return 0 }
+func (fakeDirInfo) Mode() fs.FileMode  { return fs.ModeDir | 0o755 }
 func (fakeDirInfo) ModTime() time.Time { return time.Time{} }
-func (fakeDirInfo) IsDir() bool       { return true }
-func (fakeDirInfo) Sys() any  { return nil }
+func (fakeDirInfo) IsDir() bool        { return true }
+func (fakeDirInfo) Sys() any           { return nil }
 
 type fakeDirEntry struct{}
 
@@ -383,12 +383,12 @@ func (fakeDirEntry) Info() (fs.FileInfo, error) { return fakeFileInfo{}, nil }
 
 type fakeFileInfo struct{}
 
-func (fakeFileInfo) Name() string      { return "001_fail.sql" }
-func (fakeFileInfo) Size() int64       { return 0 }
-func (fakeFileInfo) Mode() fs.FileMode { return 0o644 }
+func (fakeFileInfo) Name() string       { return "001_fail.sql" }
+func (fakeFileInfo) Size() int64        { return 0 }
+func (fakeFileInfo) Mode() fs.FileMode  { return 0o644 }
 func (fakeFileInfo) ModTime() time.Time { return time.Time{} }
-func (fakeFileInfo) IsDir() bool       { return false }
-func (fakeFileInfo) Sys() any  { return nil }
+func (fakeFileInfo) IsDir() bool        { return false }
+func (fakeFileInfo) Sys() any           { return nil }
 
 func TestMigrateFSReadFileError(t *testing.T) {
 	database := openMemory(t)

@@ -45,9 +45,9 @@ func (failReadDirFS) Open(name string) (fs.File, error) {
 
 type badDirFile struct{}
 
-func (badDirFile) Read([]byte) (int, error)        { return 0, fmt.Errorf("not a file") }
-func (badDirFile) Close() error                    { return nil }
-func (badDirFile) Stat() (fs.FileInfo, error)      { return fakeDirInfo{}, nil }
+func (badDirFile) Read([]byte) (int, error)   { return 0, fmt.Errorf("not a file") }
+func (badDirFile) Close() error               { return nil }
+func (badDirFile) Stat() (fs.FileInfo, error) { return fakeDirInfo{}, nil }
 func (badDirFile) ReadDir(int) ([]fs.DirEntry, error) {
 	return nil, fmt.Errorf("readdir always fails")
 }
@@ -136,7 +136,7 @@ func TestMigrate_AllMigrationsRecorded(t *testing.T) {
 
 	fsys := simpleFS(
 		"001_alpha.sql", "CREATE TABLE IF NOT EXISTS alpha (id INTEGER PRIMARY KEY);",
-		"002_beta.sql",  "CREATE TABLE IF NOT EXISTS beta  (id INTEGER PRIMARY KEY);",
+		"002_beta.sql", "CREATE TABLE IF NOT EXISTS beta  (id INTEGER PRIMARY KEY);",
 		"003_gamma.sql", "CREATE TABLE IF NOT EXISTS gamma (id INTEGER PRIMARY KEY);",
 	)
 
@@ -387,7 +387,7 @@ func TestMigrate_AppliedAtIsISO8601(t *testing.T) {
 		t.Fatalf("querying applied_at: %v", err)
 	}
 
-	// SQLite datetime('now') produces "YYYY-MM-DD HH:MM:SS".
+	// SQLite TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS') produces "YYYY-MM-DD HH:MM:SS".
 	formats := []string{
 		"2006-01-02 15:04:05",
 		time.RFC3339,
@@ -457,7 +457,7 @@ func TestMigrate_PartialRunRecordsOnlyApplied(t *testing.T) {
 
 	fsys := simpleFS(
 		"001_good.sql", "CREATE TABLE IF NOT EXISTS partial_good (id INTEGER PRIMARY KEY);",
-		"002_bad.sql",  "THIS IS DEFINITELY NOT SQL;",
+		"002_bad.sql", "THIS IS DEFINITELY NOT SQL;",
 	)
 
 	_ = db.MigrateFS(database, fsys) // we expect an error; ignore it here
@@ -476,9 +476,9 @@ func TestMigrate_NonSQLFilesSkipped(t *testing.T) {
 	database := openMemory(t)
 
 	fsys := fstest.MapFS{
-		"README.md":   {Data: []byte("not sql")},
-		"001_ok.sql":  {Data: []byte("CREATE TABLE IF NOT EXISTS ns_test (id INTEGER PRIMARY KEY);")},
-		"002_ok.go":   {Data: []byte("package migrations")},
+		"README.md":  {Data: []byte("not sql")},
+		"001_ok.sql": {Data: []byte("CREATE TABLE IF NOT EXISTS ns_test (id INTEGER PRIMARY KEY);")},
+		"002_ok.go":  {Data: []byte("package migrations")},
 	}
 
 	if err := db.MigrateFS(database, fsys); err != nil {
@@ -604,7 +604,7 @@ func TestMigrate_SchemaVersionsHasPrimaryKey(t *testing.T) {
 
 	// Attempting a duplicate insert must fail.
 	_, err := database.Exec(
-		"INSERT INTO schema_versions (version, applied_at) VALUES ('001_pk.sql', datetime('now'))",
+		"INSERT INTO schema_versions (version, applied_at) VALUES ('001_pk.sql', TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS'))",
 	)
 	if err == nil {
 		t.Error("duplicate insert into schema_versions should fail — PRIMARY KEY not enforced")

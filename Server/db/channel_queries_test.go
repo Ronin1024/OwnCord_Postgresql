@@ -215,7 +215,7 @@ func TestGetChannelPermissions_WithOverride(t *testing.T) {
 	chID, _ := database.CreateChannel("perms2", "text", "", "", 0)
 	// Insert an override directly.
 	_, err := database.Exec(
-		`INSERT INTO channel_overrides (channel_id, role_id, allow, deny) VALUES (?, ?, ?, ?)`,
+		`INSERT INTO channel_overrides (channel_id, role_id, allow, deny) VALUES ($1, $2, $3, $4)`,
 		chID, 4, int64(0x400), int64(0x200),
 	)
 	if err != nil {

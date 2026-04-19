@@ -13,14 +13,15 @@ import (
 
 // CreateUser inserts a new user record and returns the assigned ID.
 func (d *DB) CreateUser(username, passwordHash string, roleID int) (int64, error) {
-	res, err := d.sqlDB.Exec(
-		`INSERT INTO users (username, password, role_id) VALUES (?, ?, ?)`,
+	var ID int64
+	err := d.sqlDB.QueryRow(
+		`INSERT INTO users (username, password, role_id) VALUES ($1, $2, $3) RETURNING id`,
 		username, passwordHash, roleID,
-	)
+	).Scan(&ID)
 	if err != nil {
 		return 0, fmt.Errorf("CreateUser: %w", err)
 	}
-	return res.LastInsertId()
+	return ID, nil
 }
 
 // CreateUserWithInvite atomically consumes an invite and creates the user in
@@ -39,9 +40,9 @@ func (d *DB) CreateUserWithInvite(username, passwordHash string, roleID int, inv
 
 	result, err := tx.Exec(
 		`UPDATE invites SET use_count = use_count + 1
-		 WHERE code = ? AND revoked = 0
+		 WHERE code = $1 AND revoked = 0
 		 AND (max_uses IS NULL OR use_count < max_uses)
-		 AND (expires_at IS NULL OR strftime('%s', expires_at) > strftime('%s', 'now'))`,
+		 AND (expires_at IS NULL OR expires_at::TIMESTAMP > NOW())`,
 		inviteCode,
 	)
 	if err != nil {
@@ -55,14 +56,12 @@ func (d *DB) CreateUserWithInvite(username, passwordHash string, roleID int, inv
 		return 0, fmt.Errorf("CreateUserWithInvite invite unavailable: %w", ErrNotFound)
 	}
 
-	result, err = tx.Exec(
-		`INSERT INTO users (username, password, role_id) VALUES (?, ?, ?)`,
-		username, passwordHash, roleID,
-	)
+	var ID int64
+	err = tx.QueryRow(`INSERT INTO users (username, password, role_id) VALUES ($1, $2, $3) RETURNING id`, username, passwordHash, roleID).Scan(&ID)
 	if err != nil {
 		return 0, fmt.Errorf("CreateUserWithInvite create user: %w", err)
 	}
-	uid, err := result.LastInsertId()
+	uid, err := ID, nil
 	if err != nil {
 		return 0, fmt.Errorf("CreateUserWithInvite last insert id: %w", err)
 	}
@@ -79,7 +78,7 @@ func (d *DB) GetUserByUsername(username string) (*User, error) {
 	row := d.sqlDB.QueryRow(
 		`SELECT id, username, password, avatar, role_id, totp_secret, status,
 		        created_at, last_seen, banned, ban_reason, ban_expires
-		 FROM users WHERE username = ? COLLATE NOCASE`,
+		 FROM users WHERE username = $1 `,
 		username,
 	)
 	return scanUser(row)
@@ -90,7 +89,7 @@ func (d *DB) GetUserByID(id int64) (*User, error) {
 	row := d.sqlDB.QueryRow(
 		`SELECT id, username, password, avatar, role_id, totp_secret, status,
 		        created_at, last_seen, banned, ban_reason, ban_expires
-		 FROM users WHERE id = ?`,
+		 FROM users WHERE id = $1`,
 		id,
 	)
 	return scanUser(row)
@@ -119,7 +118,7 @@ func scanUser(row *sql.Row) (*User, error) {
 // UpdateUserStatus sets the status column for the given user ID.
 func (d *DB) UpdateUserStatus(id int64, status string) error {
 	_, err := d.sqlDB.Exec(
-		`UPDATE users SET status = ?, last_seen = datetime('now') WHERE id = ?`,
+		`UPDATE users SET status = $1, last_seen = TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS') WHERE id = $2`,
 		status, id,
 	)
 	if err != nil {
@@ -130,7 +129,7 @@ func (d *DB) UpdateUserStatus(id int64, status string) error {
 
 // UpdateUserTOTPSecret sets or clears the TOTP secret for a user.
 func (d *DB) UpdateUserTOTPSecret(id int64, secret *string) error {
-	_, err := d.sqlDB.Exec(`UPDATE users SET totp_secret = ? WHERE id = ?`, secret, id)
+	_, err := d.sqlDB.Exec(`UPDATE users SET totp_secret = $1 WHERE id = $2`, secret, id)
 	if err != nil {
 		return fmt.Errorf("UpdateUserTOTPSecret: %w", err)
 	}
@@ -156,7 +155,7 @@ func (d *DB) BanUser(id int64, reason string, expires *time.Time) error {
 		expiresStr = &s
 	}
 	_, err := d.sqlDB.Exec(
-		`UPDATE users SET banned = 1, ban_reason = ?, ban_expires = ? WHERE id = ?`,
+		`UPDATE users SET banned = 1, ban_reason = $1, ban_expires = $2 WHERE id = $3`,
 		reason, expiresStr, id,
 	)
 	if err != nil {
@@ -168,7 +167,7 @@ func (d *DB) BanUser(id int64, reason string, expires *time.Time) error {
 // UnbanUser removes the ban from a user.
 func (d *DB) UnbanUser(id int64) error {
 	_, err := d.sqlDB.Exec(
-		`UPDATE users SET banned = 0, ban_reason = NULL, ban_expires = NULL WHERE id = ?`,
+		`UPDATE users SET banned = 0, ban_reason = NULL, ban_expires = NULL WHERE id = $1`,
 		id,
 	)
 	if err != nil {
@@ -183,15 +182,16 @@ func (d *DB) UnbanUser(id int64) error {
 // tokenHash must already be hashed (never store plaintext tokens).
 func (d *DB) CreateSession(userID int64, tokenHash, device, ip string) (int64, error) {
 	expiresAt := time.Now().Add(sessionTTL).UTC().Format("2006-01-02T15:04:05Z")
-	res, err := d.sqlDB.Exec(
+	var ID int64
+	err := d.sqlDB.QueryRow(
 		`INSERT INTO sessions (user_id, token, device, ip_address, expires_at)
-		 VALUES (?, ?, ?, ?, ?)`,
+		 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
 		userID, tokenHash, device, ip, expiresAt,
-	)
+	).Scan(&ID)
 	if err != nil {
 		return 0, fmt.Errorf("CreateSession: %w", err)
 	}
-	return res.LastInsertId()
+	return ID, nil
 }
 
 // GetSessionByTokenHash retrieves a session by its hashed token, or nil if
@@ -199,7 +199,7 @@ func (d *DB) CreateSession(userID int64, tokenHash, device, ip string) (int64, e
 func (d *DB) GetSessionByTokenHash(tokenHash string) (*Session, error) {
 	row := d.sqlDB.QueryRow(
 		`SELECT id, user_id, token, device, ip_address, created_at, last_used, expires_at
-		 FROM sessions WHERE token = ?`,
+		 FROM sessions WHERE token = $1`,
 		tokenHash,
 	)
 	s := &Session{}
@@ -234,7 +234,7 @@ func (d *DB) GetSessionWithBanStatus(tokenHash string) (*SessionWithBanStatus, e
 		        u.banned, u.ban_reason, u.ban_expires
 		 FROM sessions s
 		 JOIN users u ON s.user_id = u.id
-		 WHERE s.token = ?`,
+		 WHERE s.token = $1`,
 		tokenHash,
 	)
 	r := &SessionWithBanStatus{}
@@ -256,7 +256,7 @@ func (d *DB) GetSessionWithBanStatus(tokenHash string) (*SessionWithBanStatus, e
 
 // DeleteSession removes the session with the given token hash.
 func (d *DB) DeleteSession(tokenHash string) error {
-	_, err := d.sqlDB.Exec(`DELETE FROM sessions WHERE token = ?`, tokenHash)
+	_, err := d.sqlDB.Exec(`DELETE FROM sessions WHERE token = $1`, tokenHash)
 	if err != nil {
 		return fmt.Errorf("DeleteSession: %w", err)
 	}
@@ -266,9 +266,8 @@ func (d *DB) DeleteSession(tokenHash string) error {
 // DeleteExpiredSessions removes all sessions whose expires_at is in the past.
 // Compares using strftime to handle both ISO-8601 and SQLite datetime formats.
 func (d *DB) DeleteExpiredSessions() error {
-	_, err := d.sqlDB.Exec(
-		`DELETE FROM sessions WHERE strftime('%s', expires_at) < strftime('%s', 'now')`,
-	)
+	// В Postgresql strftime не существует
+	_, err := d.sqlDB.Exec(`DELETE FROM sessions WHERE expires_at::TIMESTAMP < NOW()`)
 	if err != nil {
 		return fmt.Errorf("DeleteExpiredSessions: %w", err)
 	}
@@ -278,7 +277,7 @@ func (d *DB) DeleteExpiredSessions() error {
 // TouchSession updates last_used for the session with the given token hash.
 func (d *DB) TouchSession(tokenHash string) error {
 	_, err := d.sqlDB.Exec(
-		`UPDATE sessions SET last_used = datetime('now') WHERE token = ?`,
+		`UPDATE sessions SET last_used = TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS') WHERE token = $1`,
 		tokenHash,
 	)
 	if err != nil {
@@ -308,7 +307,7 @@ func (d *DB) CreateInvite(createdBy int64, maxUses int, expiresAt *time.Time) (s
 	}
 
 	_, err = d.sqlDB.Exec(
-		`INSERT INTO invites (code, created_by, max_uses, expires_at) VALUES (?, ?, ?, ?)`,
+		`INSERT INTO invites (code, created_by, max_uses, expires_at) VALUES ($1, $2, $3, $4)`,
 		code, createdBy, maxUsesVal, expiresStr,
 	)
 	if err != nil {
@@ -321,7 +320,7 @@ func (d *DB) CreateInvite(createdBy int64, maxUses int, expiresAt *time.Time) (s
 func (d *DB) GetInvite(code string) (*Invite, error) {
 	row := d.sqlDB.QueryRow(
 		`SELECT id, code, created_by, max_uses, use_count, expires_at, revoked, created_at
-		 FROM invites WHERE code = ?`,
+		 FROM invites WHERE code = $1`,
 		code,
 	)
 	inv := &Invite{}
@@ -355,9 +354,9 @@ func (d *DB) GetInvite(code string) (*Invite, error) {
 func (d *DB) UseInviteAtomic(code string) error {
 	result, err := d.sqlDB.Exec(
 		`UPDATE invites SET use_count = use_count + 1
-		 WHERE code = ? AND revoked = 0
+		 WHERE code = $1 AND revoked = 0
 		 AND (max_uses IS NULL OR use_count < max_uses)
-		 AND (expires_at IS NULL OR strftime('%s', expires_at) > strftime('%s', 'now'))`,
+		 AND (expires_at IS NULL OR expires_at::TIMESTAMP > NOW())`,
 		code,
 	)
 	if err != nil {
@@ -375,7 +374,7 @@ func (d *DB) UseInviteAtomic(code string) error {
 
 // RevokeInvite marks an invite as revoked.
 func (d *DB) RevokeInvite(code string) error {
-	_, err := d.sqlDB.Exec(`UPDATE invites SET revoked = 1 WHERE code = ?`, code)
+	_, err := d.sqlDB.Exec(`UPDATE invites SET revoked = 1 WHERE code = $1`, code)
 	if err != nil {
 		return fmt.Errorf("RevokeInvite: %w", err)
 	}

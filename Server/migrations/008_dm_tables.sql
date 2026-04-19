@@ -14,6 +14,6 @@ CREATE INDEX IF NOT EXISTS idx_dm_participants_user ON dm_participants(user_id);
 CREATE TABLE IF NOT EXISTS dm_open_state (
     user_id    INTEGER NOT NULL REFERENCES users(id)    ON DELETE CASCADE,
     channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
-    opened_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    opened_at  TEXT    NOT NULL DEFAULT TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS'),
     PRIMARY KEY (user_id, channel_id)
 );
