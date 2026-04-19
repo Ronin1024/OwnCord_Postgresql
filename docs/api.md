@@ -459,7 +459,7 @@ Unpin a message from a channel.
 
 ### GET /api/v1/search
 
-Full-text search across messages in channels the user can read. Uses SQLite FTS5 for matching.
+Full-text search across messages in channels the user can read. Uses Postgresql GIN for matching.
 
 **Auth:** Required
 

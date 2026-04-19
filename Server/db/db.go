@@ -1,5 +1,5 @@
 // Package db provides database access for the OwnCord server.
-// It uses modernc.org/sqlite — a pure-Go SQLite driver requiring no CGO.
+// It uses github.com/lib/pq — a pure-Go Postgresql driver.
 package db
 
 import (
@@ -28,13 +28,13 @@ func Open(path string) (*DB, error) {
 
 	sqlDB, err := sql.Open("postgres", connectString)
 	if err != nil {
-		return nil, fmt.Errorf("opening sqlite db: %w", err)
+		return nil, fmt.Errorf("opening postgres db: %w", err)
 	}
 
 	// Verify the connection is actually usable.
 	if err := sqlDB.Ping(); err != nil {
 		_ = sqlDB.Close()
-		return nil, fmt.Errorf("pinging sqlite db: %w", err)
+		return nil, fmt.Errorf("pinging postgres db: %w", err)
 	}
 
 	// SQLite only allows one writer at a time. Pin to a single connection

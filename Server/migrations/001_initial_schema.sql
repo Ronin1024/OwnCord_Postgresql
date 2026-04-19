@@ -86,25 +86,20 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel_id, id DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_user    ON messages(user_id);
 
--- CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
---     content,
---     content='messages',
---     content_rowid='id'
--- );
 
 CREATE TABLE messages_fts (
     id INTEGER PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
     messages_fts TEXT,
     content tsvector
 );
--- Создание индекса
+
 CREATE INDEX idx_messages_fts_search ON messages_fts USING GIN (content);
 
 
 CREATE OR REPLACE FUNCTION messages_after_insert_trigger()
 RETURNS TRIGGER AS $$
 BEGIN
-    INSERT INTO messages_fts(id, content) VALUES (NEW.id, to_tsvector('russian', NEW.content));
+    INSERT INTO messages_fts(id, content) VALUES (NEW.id, to_tsvector(NEW.content));
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -115,9 +110,6 @@ AFTER INSERT ON messages
 FOR EACH ROW
 EXECUTE FUNCTION messages_after_insert_trigger();
 
--- CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages BEGIN
---     INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
--- END;
 
 CREATE OR REPLACE FUNCTION messages_after_delete_trigger()
 RETURNS TRIGGER AS $$
@@ -133,16 +125,13 @@ AFTER DELETE ON messages
 FOR EACH ROW
 EXECUTE FUNCTION messages_after_delete_trigger();
 
--- CREATE TRIGGER IF NOT EXISTS messages_ad AFTER DELETE ON messages BEGIN
---     INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', old.id, old.content);
--- END;
 
 CREATE OR REPLACE FUNCTION messages_after_update_trigger()
 RETURNS TRIGGER AS $$
 BEGIN
     IF NEW.content != OLD.content THEN
         INSERT INTO messages_fts(messages_fts, id, content) VALUES('delete', OLD.id, OLD.content);
-        INSERT INTO messages_fts(id, content) VALUES (NEW.id, to_tsvector('russian', NEW.content));
+        INSERT INTO messages_fts(id, content) VALUES (NEW.id, to_tsvector(NEW.content));
     END IF;
     RETURN NEW;
 END;
@@ -154,11 +143,6 @@ AFTER UPDATE ON messages
 FOR EACH ROW
 EXECUTE FUNCTION messages_after_update_trigger();
 
-
--- CREATE TRIGGER IF NOT EXISTS messages_au AFTER UPDATE ON messages BEGIN
---     INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', old.id, old.content);
---     INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
--- END;
 
 CREATE TABLE IF NOT EXISTS attachments (
     id          TEXT    PRIMARY KEY,

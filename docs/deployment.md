@@ -107,9 +107,7 @@ tls:
 
 ## Backup Strategy
 
-### SQLite WAL Considerations
-
-The database uses SQLite WAL mode. Do NOT copy the `.db` file directly while the server is running -- use the backup endpoint instead.
+Nothing
 
 ### Admin Backup Endpoint
 

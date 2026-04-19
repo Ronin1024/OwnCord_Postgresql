@@ -34,7 +34,7 @@ Run `chatserver.exe`. On first run:
 1. `config.yaml` is created in the working directory with default settings
 2. `data/` directory is created for the database, TLS certs, uploads, and backups
 3. A self-signed TLS certificate is generated automatically
-4. SQLite database is created and all migrations are applied
+4. Postgresql database is created and all migrations are applied
 5. All user statuses are reset to offline (clean slate)
 
 The server starts on `https://0.0.0.0:8443`.

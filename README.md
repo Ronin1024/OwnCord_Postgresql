@@ -26,7 +26,7 @@ dependencies, works fully on LAN.
 - Message editing, deletion, and replies
 - Emoji reactions with per-message counts
 - Typing indicators
-- Full-text message search (SQLite FTS5)
+- Full-text message search (Postgresql GIN)
 - Pinned messages per channel
 - Rich link previews with Open Graph metadata
 - YouTube embed support with cached titles
@@ -179,7 +179,7 @@ Two components: a **Go server** and a **Tauri v2 client**
 |  |  Voice/Video  |--+------->|  |  LiveKit SFU  |  |
 |  +---------------+  |         |  +---------------+  |
 +---------------------+         |  +---------------+  |
-                                |  |  SQLite DB    |  |
+                                |  | Postgresql DB |  |
                                 |  +---------------+  |
                                 +---------------------+
 ```
@@ -195,7 +195,7 @@ OwnCord/
 ├── Server/                  # Go server
 │   ├── api/                 #   REST handlers + middleware
 │   ├── ws/                  #   WebSocket hub + handlers
-│   ├── db/                  #   SQLite queries + migrations
+│   ├── db/                  #   Postgresql queries + migrations
 │   ├── auth/                #   Authentication + rate limiting
 │   ├── config/              #   YAML config loading
 │   ├── updater/             #   GitHub Releases update checker
@@ -272,7 +272,6 @@ is stored in a `data/` directory alongside the executable:
 
 ```text
 data/
-├── owncord.db         # SQLite database
 ├── certs/             # TLS certificates (auto-generated if self_signed)
 ├── uploads/           # User-uploaded files
 └── backups/           # Database backups
@@ -334,7 +333,7 @@ See [Contributing Guide](docs/contributing.md) for details.
 | Component | Technology |
 | --------- | --------- |
 | Server | Go, chi router, LiveKit server SDK |
-| Database | SQLite (pure Go, embedded) |
+| Database | Postgresql (pure Go, embedded) |
 | Client | Tauri v2 (Rust + TypeScript) |
 | Voice/Video | LiveKit SFU (companion process) |
 | Build | NSIS installer, GitHub Actions CI |

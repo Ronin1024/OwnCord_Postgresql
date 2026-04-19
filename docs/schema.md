@@ -1,24 +1,9 @@
 # Database Schema Reference
 
-OwnCord uses a single SQLite database file (`data/chatserver.db`) with the pure-Go driver `modernc.org/sqlite` (no CGO). Migrations run automatically on startup.
+OwnCord uses a single Postgesql database connection with the pure-Go driver `github.com/lib/pq`. Migrations run automatically on startup.
 
 ---
 
-## Database Configuration
-
-| PRAGMA | Value | Purpose |
-|--------|-------|---------|
-| `journal_mode` | `WAL` | Write-Ahead Logging for concurrent readers |
-| `foreign_keys` | `ON` | Enforces all `REFERENCES` constraints |
-| `busy_timeout` | `5000` | Waits up to 5 seconds for the write lock |
-| `synchronous` | `NORMAL` | Safe with WAL mode, reduces fsync calls |
-| `temp_store` | `MEMORY` | Temporary tables stored in RAM |
-| `mmap_size` | `268435456` | 256 MB memory-mapped I/O |
-| `cache_size` | `-64000` | 64 MB page cache |
-
-SQLite only allows one writer at a time. The connection pool is pinned to a single connection.
-
----
 
 ## Migration System
 
@@ -27,7 +12,7 @@ Migrations are embedded `.sql` files applied in lexicographic order. Each migrat
 ```sql
 CREATE TABLE IF NOT EXISTS schema_versions (
     version    TEXT PRIMARY KEY,
-    applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+    applied_at TEXT NOT NULL DEFAULT TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS')
 );
 ```
 
