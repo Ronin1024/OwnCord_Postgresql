@@ -54,6 +54,7 @@ RUN chmod +x /app/livekit/livekit-server
 USER owncord
 
 # Opening ports
+EXPOSE 80
 EXPOSE 8443
 EXPOSE 7880
 EXPOSE 7881
