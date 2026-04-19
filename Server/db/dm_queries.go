@@ -82,7 +82,7 @@ func (d *DB) GetOrCreateDMChannel(user1ID, user2ID int64) (*Channel, bool, error
 
 	// Insert channel with type 'dm' and empty name.
 	var ID int64
-	err = d.sqlDB.QueryRow(
+	err = tx.QueryRow(
 		`INSERT INTO channels (name, type) VALUES ('', 'dm') RETURNING id`,
 	).Scan(&ID)
 	if err != nil {
